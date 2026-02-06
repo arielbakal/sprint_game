@@ -205,17 +205,59 @@ export default class PlayerController {
         const player = this.state.player;
         const ca = player.cameraAngle;
 
-        // Clamp vertical angle to avoid top-down issues (0.1 to ~1.4 radians)
-        ca.y = Math.max(0.1, Math.min(1.4, ca.y));
+        // Clamp vertical angle
+        if (player.cameraMode === 'first') {
+            // Allow full range for FPS
+            ca.y = Math.max(-1.5, Math.min(1.5, ca.y));
+        } else {
+            // Restrict for TPS
+            ca.y = Math.max(0.1, Math.min(1.4, ca.y));
+        }
 
-        const dist = 5.0;
-        const camX = player.pos.x + dist * Math.sin(ca.x) * Math.cos(ca.y);
-        const camZ = player.pos.z + dist * Math.cos(ca.x) * Math.cos(ca.y);
-        const camY = player.pos.y + dist * Math.sin(ca.y) + 0.8;
+        if (player.cameraMode === 'first') {
+            if (this.modelPivot) this.modelPivot.visible = false;
+            // First person: Camera at eye level
+            camera.position.set(player.pos.x, player.pos.y + 1.6, player.pos.z);
+            // Look direction derived from angles (inverted relative to orbit)
+            // ca.x is azimuth. In TPS, camera is at +sin(x), +cos(x).
+            // To look "outward" in the same direction the camera WAS, we look towards -sin(x), -cos(x).
+            // But usually we want W to move forward (towards look dir).
+            // In TPS, W moves towards player orientation.
+            // Let's enforce that camera looks "forward".
 
-        const desiredPos = new THREE.Vector3(camX, camY, camZ);
-        camera.position.lerp(desiredPos, 0.1);
-        camera.lookAt(player.pos.x, player.pos.y + 0.8, player.pos.z);
+            // Note: ca.x logic in input handler subtracts e.movementX.
+            // Map angles to look target
+            const lookX = -Math.sin(ca.x);
+            const lookZ = -Math.cos(ca.x);
+            // Height mapping: ca.y=0 -> horizon.
+            // In TPS code: camY = pos.y + dist * sin(ca.y). sin(0)=0 (horizon), sin(1.4)=0.98 (overhead).
+            // So ca.y is elevation.
+            // For FPS, let's just hold simple pitch.
+            const lookY = Math.tan(ca.y - 0.3); // Minus offset to center horizon
+
+            const target = new THREE.Vector3(
+                camera.position.x + lookX,
+                camera.position.y + lookY,
+                camera.position.z + lookZ
+            );
+            camera.lookAt(target);
+
+            // Sync player rotation to camera look for movement
+            // Ideally player body rotates with camera in FPS
+            player.targetRotation = ca.x;
+
+        } else {
+            if (this.modelPivot) this.modelPivot.visible = true;
+            const dist = 5.0;
+            const camX = player.pos.x + dist * Math.sin(ca.x) * Math.cos(ca.y);
+            const camZ = player.pos.z + dist * Math.cos(ca.x) * Math.cos(ca.y);
+            // ca.y is elevation angle [0.1, 1.4]
+            const camY = player.pos.y + dist * Math.sin(ca.y) + 0.8;
+
+            const desiredPos = new THREE.Vector3(camX, camY, camZ);
+            camera.position.lerp(desiredPos, 0.1);
+            camera.lookAt(player.pos.x, player.pos.y + 0.8, player.pos.z);
+        }
     }
 
     getPosition() {
