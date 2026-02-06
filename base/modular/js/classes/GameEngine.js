@@ -234,26 +234,36 @@ export default class GameEngine {
         this.world.scene.background = this.state.palette.background;
         this.ui.invContainer.style.display = 'flex';
 
-        const rnd = (minR = 1.0) => {
+        // Initial island scale doubled
+        const initialScale = 2.0;
+
+        // Rnd radius increased to match new scale (approx 5.5 * 2 = 11.0 max)
+        const rnd = (minR = 2.0) => {
             const a = Math.random() * 6.28;
-            const r = minR + Math.random() * (5.5 - minR);
+            const r = minR + Math.random() * (11.0 - minR);
             return { x: Math.cos(a) * r, z: Math.sin(a) * r };
         };
 
         const island = this.factory.createIsland(this.state.palette);
         this.islandGroup = island.group;
         this.groundPlane = island.groundPlane;
+
+        // Apply scale
+        this.islandGroup.scale.set(initialScale, initialScale, initialScale);
+        this.islandGroup.position.y = this.factory.O_Y * (1 - initialScale);
+
         this.world.add(this.islandGroup);
         this.state.player.pos = new THREE.Vector3(0, 5, 0);
 
-        for (let i = 0; i < 6; i++) { const p = rnd(); this.state.entities.push(this.factory.createTree(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 8; i++) { const p = rnd(); this.state.entities.push(this.factory.createBush(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 5; i++) { const p = rnd(); this.state.entities.push(this.factory.createRock(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 30; i++) { const p = rnd(0.5); this.state.entities.push(this.factory.createGrass(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 8; i++) { const p = rnd(); this.state.entities.push(this.factory.createFlower(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 2; i++) { const p = rnd(); const c = this.factory.createCreature(this.state.palette, p.x, p.z); this.state.entities.push(c); this.world.add(c); }
+        // Spawn more entities for the larger space
+        for (let i = 0; i < 12; i++) { const p = rnd(); this.state.entities.push(this.factory.createTree(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 16; i++) { const p = rnd(); this.state.entities.push(this.factory.createBush(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 10; i++) { const p = rnd(); this.state.entities.push(this.factory.createRock(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 60; i++) { const p = rnd(1.0); this.state.entities.push(this.factory.createGrass(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 16; i++) { const p = rnd(); this.state.entities.push(this.factory.createFlower(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 4; i++) { const p = rnd(); const c = this.factory.createCreature(this.state.palette, p.x, p.z); this.state.entities.push(c); this.world.add(c); }
 
-        const chiefPos = rnd(2.0);
+        const chiefPos = rnd(4.0);
         const chief = this.factory.createChief(this.state.palette, chiefPos.x, chiefPos.z);
         this.state.entities.push(chief);
         this.world.add(chief);

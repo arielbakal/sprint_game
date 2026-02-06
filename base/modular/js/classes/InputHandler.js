@@ -197,8 +197,11 @@ export default class InputHandler {
         const sfx = this.engine.audio;
         const hits = this.raycaster.intersectObject(this.engine.groundPlane);
         if (hits.length && hits[0].distance < 12) {
-            sfx.place();
             const p = hits[0].point;
+            const boundR = 5.0 * (this.engine.islandGroup ? this.engine.islandGroup.scale.x : 1);
+            if (p.x * p.x + p.z * p.z > boundR * boundR) return;
+
+            sfx.place();
             const it = state.inventory[state.selectedSlot];
             let ent = this.createEntityFromItem(it, p);
             if (ent) {
@@ -265,8 +268,11 @@ export default class InputHandler {
         this.raycaster.setFromCamera(this.mouse, world.camera);
         const hits = this.raycaster.intersectObject(this.engine.groundPlane);
         if (hits.length) {
-            sfx.place();
             const p = hits[0].point;
+            const boundR = 5.0 * (this.engine.islandGroup ? this.engine.islandGroup.scale.x : 1);
+            if (p.x * p.x + p.z * p.z > boundR * boundR) return;
+
+            sfx.place();
             const it = state.inventory[state.selectedSlot];
             let ent = this.createEntityFromItem(it, p);
             if (ent) {
@@ -316,6 +322,10 @@ export default class InputHandler {
         this.raycaster.setFromCamera(this.mouse, world.camera);
         const hits = this.raycaster.intersectObject(this.engine.groundPlane);
         if (hits.length) {
+            // Check bounds before anything else
+            const boundR = 5.0 * (this.engine.islandGroup ? this.engine.islandGroup.scale.x : 1);
+            if (hits[0].point.x ** 2 + hits[0].point.z ** 2 > boundR ** 2) return;
+
             sfx.pop();
             const foodHits = this.raycaster.intersectObjects(state.foods, true);
             if (foodHits.length) {
