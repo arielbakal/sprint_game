@@ -524,9 +524,51 @@ export default class GameEngine {
         // Forward direction from boat rotation
         const forward = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
 
-        // Apply movement
-        boat.position.x += forward.x * state.boatSpeed;
-        boat.position.z += forward.z * state.boatSpeed;
+        // Proposed new position
+        const newX = boat.position.x + forward.x * state.boatSpeed;
+        const newZ = boat.position.z + forward.z * state.boatSpeed;
+
+        // Island collision check
+        const boatCollisionR = 2.8; // boat hull half-length
+        const mainR = 7 * (this.islandGroup ? this.islandGroup.scale.x : 1);
+        const offset = state.secondIslandOffset;
+        const secR = 7 * (this.secondIslandGroup ? this.secondIslandGroup.scale.x : 1);
+
+        // Build list of all collidable islands: {cx, cz, radius}
+        const islands = [
+            { cx: 0, cz: 0, r: mainR },
+            { cx: offset.x, cz: offset.z, r: secR }
+        ];
+        // Hint islands
+        this.hintIslands.forEach(h => {
+            islands.push({ cx: h.position.x, cz: h.position.z, r: 2.0 });
+        });
+
+        let blocked = false;
+        for (const isl of islands) {
+            const dx = newX - isl.cx;
+            const dz = newZ - isl.cz;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            const minDist = isl.r + boatCollisionR;
+            if (dist < minDist) {
+                // Push the boat back out to the edge
+                const angle = Math.atan2(dz, dx);
+                boat.position.x = isl.cx + Math.cos(angle) * minDist;
+                boat.position.z = isl.cz + Math.sin(angle) * minDist;
+                // Kill most speed on impact, keep a tiny bounce-off
+                if (Math.abs(state.boatSpeed) > 0.02) {
+                    this.audio.pop();
+                }
+                state.boatSpeed *= -0.15;
+                blocked = true;
+                break;
+            }
+        }
+
+        if (!blocked) {
+            boat.position.x = newX;
+            boat.position.z = newZ;
+        }
         boat.rotation.y = state.boatRotation;
 
         // Ocean bobbing
