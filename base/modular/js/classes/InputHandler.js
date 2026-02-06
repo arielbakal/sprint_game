@@ -29,6 +29,11 @@ export default class InputHandler {
                 this.engine.updateInventory();
             }
             if (k === 'm' && state.gameMode === 'fps') document.exitPointerLock();
+            if (k === 'g' && state.phase === 'playing') {
+                const nextMode = state.gameMode === 'creator' ? 'fps' : 'creator';
+                this.engine.switchGameMode(nextMode);
+                sfx.select();
+            }
         });
         document.addEventListener('keyup', (e) => {
             const k = e.key.toLowerCase();
@@ -60,6 +65,18 @@ export default class InputHandler {
                 state.player.targetPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, state.player.targetPitch));
             }
         });
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === renderer.domElement) {
+                document.getElementById('custom-cursor').style.display = 'none';
+                document.getElementById('fps-msg').style.display = 'none';
+            } else {
+                if (state.gameMode === 'fps') {
+                    document.getElementById('fps-msg').style.display = 'block';
+                    document.getElementById('custom-cursor').style.display = 'block';
+                }
+            }
+        });
+
         window.addEventListener('wheel', (e) => {
             if (state.phase !== 'playing') return;
             if (state.gameMode === 'fps') {
@@ -195,18 +212,24 @@ export default class InputHandler {
         const world = this.engine.world;
         const factory = this.engine.factory;
         const sfx = this.engine.audio;
-        const hits = this.raycaster.intersectObject(this.engine.groundPlane);
-        if (hits.length && hits[0].distance < 12) {
+        const it = state.inventory[state.selectedSlot];
+
+        if (!this.engine.waterMesh) return;
+
+        const waterHits = this.raycaster.intersectObject(this.engine.waterMesh);
+        if (waterHits.length && waterHits[0].distance < 20) {
             sfx.place();
-            const p = hits[0].point;
-            const it = state.inventory[state.selectedSlot];
-            let ent = this.createEntityFromItem(it, p);
-            if (ent) {
-                for (let i = 0; i < 5; i++) factory.createParticle(p, it.color);
-                it.count = (it.count || 1) - 1;
-                if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
-                this.engine.updateInventory();
-            }
+            const p = waterHits[0].point;
+            const log = factory.createLog(p.x, p.z, it.color);
+            world.add(log);
+            state.entities.push(log);
+            this.engine.logs.push(log);
+            for (let i = 0; i < 8; i++) factory.createParticle(p, it.color);
+            it.count = (it.count || 1) - 1;
+            if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+            this.engine.updateInventory();
+
+            this.checkForBoat(world, factory, sfx);
         }
     }
 
@@ -260,20 +283,73 @@ export default class InputHandler {
         const world = this.engine.world;
         const factory = this.engine.factory;
         const sfx = this.engine.audio;
+
+        if (!this.engine.waterMesh) return;
+
         this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
         this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         this.raycaster.setFromCamera(this.mouse, world.camera);
-        const hits = this.raycaster.intersectObject(this.engine.groundPlane);
-        if (hits.length) {
+
+        const it = state.inventory[state.selectedSlot];
+        const waterHits = this.raycaster.intersectObject(this.engine.waterMesh);
+        if (waterHits.length) {
             sfx.place();
-            const p = hits[0].point;
-            const it = state.inventory[state.selectedSlot];
-            let ent = this.createEntityFromItem(it, p);
-            if (ent) {
-                for (let i = 0; i < 5; i++) factory.createParticle(p, it.color);
-                it.count = (it.count || 1) - 1;
-                if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
-                this.engine.updateInventory();
+            const p = waterHits[0].point;
+            const log = factory.createLog(p.x, p.z, it.color);
+            world.add(log);
+            state.entities.push(log);
+            this.engine.logs.push(log);
+            for (let i = 0; i < 8; i++) factory.createParticle(p, it.color);
+            it.count = (it.count || 1) - 1;
+            if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+            this.engine.updateInventory();
+
+            this.checkForBoat(world, factory, sfx);
+        }
+    }
+
+    checkForBoat(world, factory, sfx) {
+        const logs = this.engine.logs;
+        if (logs.length < 4) return;
+
+        const boatRadius = 4;
+        const visited = new Set();
+
+        for (let i = 0; i < logs.length; i++) {
+            if (visited.has(i)) continue;
+            const cluster = [i];
+            visited.add(i);
+
+            for (let j = i + 1; j < logs.length; j++) {
+                if (visited.has(j)) continue;
+                const dist = logs[i].position.distanceTo(logs[j].position);
+                if (dist < boatRadius) {
+                    cluster.push(j);
+                    visited.add(j);
+                }
+            }
+
+            if (cluster.length >= 4) {
+                let centerX = 0, centerZ = 0;
+                cluster.forEach(idx => {
+                    centerX += logs[idx].position.x;
+                    centerZ += logs[idx].position.z;
+                    world.remove(logs[idx]);
+                    const entIdx = this.engine.state.entities.indexOf(logs[idx]);
+                    if (entIdx > -1) this.engine.state.entities.splice(entIdx, 1);
+                });
+                centerX /= cluster.length;
+                centerZ /= cluster.length;
+
+                const boat = factory.createBoat(centerX, centerZ, logs[i].userData.color);
+                world.add(boat);
+                this.engine.state.entities.push(boat);
+                sfx.place();
+                for (let k = 0; k < 20; k++) factory.createParticle({ x: centerX, y: -1.5, z: centerZ }, logs[i].userData.color, 1.5);
+
+                logs.splice(0).filter((_, idx) => !cluster.includes(idx));
+                this.engine.logs = logs.filter((_, idx) => !cluster.includes(idx));
+                return;
             }
         }
     }
@@ -308,6 +384,8 @@ export default class InputHandler {
 
     handleQuickTap(e) {
         const state = this.engine.state;
+        if (state.selectedSlot !== null) return;
+
         const world = this.engine.world;
         const factory = this.engine.factory;
         const sfx = this.engine.audio;
@@ -316,6 +394,10 @@ export default class InputHandler {
         this.raycaster.setFromCamera(this.mouse, world.camera);
         const hits = this.raycaster.intersectObject(this.engine.groundPlane);
         if (hits.length) {
+            // Check bounds before anything else
+            const boundR = 5.0 * (this.engine.islandGroup ? this.engine.islandGroup.scale.x : 1);
+            if (hits[0].point.x ** 2 + hits[0].point.z ** 2 > boundR ** 2) return;
+
             sfx.pop();
             const foodHits = this.raycaster.intersectObjects(state.foods, true);
             if (foodHits.length) {

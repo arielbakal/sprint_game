@@ -17,6 +17,9 @@ export default class GameEngine {
         this.spheres = [];
         this.islandGroup = null;
         this.groundPlane = null;
+        this.waterMesh = null;
+        this.hintIslands = [];
+        this.logs = [];
         this.ui = {};
         this.setupUI();
         this.initSpheres();
@@ -200,6 +203,7 @@ export default class GameEngine {
             this.state.debris.push(chunk);
         });
         this.world.remove(this.islandGroup);
+        this.hintIslands.forEach(h => this.world.remove(h));
         this.audio.fadeOut();
         setTimeout(() => this.initGame(null), 800);
     }
@@ -234,26 +238,44 @@ export default class GameEngine {
         this.world.scene.background = this.state.palette.background;
         this.ui.invContainer.style.display = 'flex';
 
-        const rnd = (minR = 1.0) => {
+        // Initial island scale doubled
+        const initialScale = 2.0;
+
+        // Rnd radius increased to match new scale (approx 5.5 * 2 = 11.0 max)
+        const rnd = (minR = 2.0) => {
             const a = Math.random() * 6.28;
-            const r = minR + Math.random() * (5.5 - minR);
+            const r = minR + Math.random() * (11.0 - minR);
             return { x: Math.cos(a) * r, z: Math.sin(a) * r };
         };
 
         const island = this.factory.createIsland(this.state.palette);
         this.islandGroup = island.group;
         this.groundPlane = island.groundPlane;
+
+        // Re-apply scale logic
+        this.islandGroup.scale.set(initialScale, initialScale, initialScale);
+        this.islandGroup.position.y = this.factory.O_Y * (1 - initialScale);
+
+        this.waterMesh = island.group.children.find(c => c.userData.type === 'water');
         this.world.add(this.islandGroup);
+
+        const leftHint = this.factory.createHintIsland(this.state.palette, -22, 0.35);
+        const rightHint = this.factory.createHintIsland(this.state.palette, 22, 0.35);
+        this.hintIslands = [leftHint, rightHint];
+        this.world.add(leftHint);
+        this.world.add(rightHint);
+
         this.state.player.pos = new THREE.Vector3(0, 5, 0);
 
-        for (let i = 0; i < 6; i++) { const p = rnd(); this.state.entities.push(this.factory.createTree(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 8; i++) { const p = rnd(); this.state.entities.push(this.factory.createBush(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 5; i++) { const p = rnd(); this.state.entities.push(this.factory.createRock(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 30; i++) { const p = rnd(0.5); this.state.entities.push(this.factory.createGrass(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 8; i++) { const p = rnd(); this.state.entities.push(this.factory.createFlower(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
-        for (let i = 0; i < 2; i++) { const p = rnd(); const c = this.factory.createCreature(this.state.palette, p.x, p.z); this.state.entities.push(c); this.world.add(c); }
+        // Spawn more entities for the larger space
+        for (let i = 0; i < 12; i++) { const p = rnd(); this.state.entities.push(this.factory.createTree(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 16; i++) { const p = rnd(); this.state.entities.push(this.factory.createBush(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 10; i++) { const p = rnd(); this.state.entities.push(this.factory.createRock(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 60; i++) { const p = rnd(1.0); this.state.entities.push(this.factory.createGrass(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 16; i++) { const p = rnd(); this.state.entities.push(this.factory.createFlower(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+        for (let i = 0; i < 4; i++) { const p = rnd(); const c = this.factory.createCreature(this.state.palette, p.x, p.z); this.state.entities.push(c); this.world.add(c); }
 
-        const chiefPos = rnd(2.0);
+        const chiefPos = rnd(4.0);
         const chief = this.factory.createChief(this.state.palette, chiefPos.x, chiefPos.z);
         this.state.entities.push(chief);
         this.world.add(chief);
@@ -271,7 +293,7 @@ export default class GameEngine {
         state.player.yaw += (state.player.targetYaw - state.player.yaw) * 0.3;
         state.player.pitch += (state.player.targetPitch - state.player.pitch) * 0.3;
         const forward = new THREE.Vector3(-Math.sin(state.player.targetYaw), 0, -Math.cos(state.player.targetYaw));
-        const right = new THREE.Vector3(forward.z, 0, -forward.x);
+        const right = new THREE.Vector3(-forward.z, 0, forward.x);
         const moveDir = new THREE.Vector3(0, 0, 0);
         if (state.inputs.w) moveDir.add(forward);
         if (state.inputs.s) moveDir.sub(forward);
@@ -408,44 +430,86 @@ export default class GameEngine {
                 if (e.userData.type === 'creature' && !e.userData.held) {
                     e.userData.age = (e.userData.age || 0) + 0.016;
                     e.userData.hunger = (e.userData.hunger || 0) + 0.016 * 0.1;
+
+                    // 1. Perception: Find Food
                     let nearestFood = null, minDist = Infinity;
-                    state.foods.forEach(f => { const d = e.position.distanceTo(f.position); if (d < minDist) { minDist = d; nearestFood = f; } });
-                    if (nearestFood && minDist < 0.5) {
-                        this.audio.eat();
-                        this.world.remove(nearestFood);
-                        state.foods.splice(state.foods.indexOf(nearestFood), 1);
-                        e.userData.hunger = 0;
-                        e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
-                        for (let j = 0; j < 3; j++) this.factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
-                        if (e.userData.eatenCount >= 3 && e.userData.age > 8) {
-                            e.userData.eatenCount = 0;
-                            this.audio.layEgg();
-                            const egg = this.factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);
-                            state.entities.push(egg);
-                            this.world.add(egg);
+                    state.foods.forEach(f => {
+                        const d = e.position.distanceTo(f.position);
+                        if (d < minDist) { minDist = d; nearestFood = f; }
+                    });
+
+                    // 2. Intent: Determine Base Direction
+                    let moveDir = new THREE.Vector3();
+                    let speed = e.userData.moveSpeed;
+
+                    if (nearestFood && minDist < 6.0) {
+                        if (minDist < 0.5) {
+                            // Eat Logic
+                            this.audio.eat();
+                            this.world.remove(nearestFood);
+                            state.foods.splice(state.foods.indexOf(nearestFood), 1);
+                            e.userData.hunger = 0;
+                            e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
+                            for (let j = 0; j < 3; j++) this.factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
+                            if (e.userData.eatenCount >= 3 && e.userData.age > 8) {
+                                e.userData.eatenCount = 0;
+                                this.audio.layEgg();
+                                const egg = this.factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);
+                                state.entities.push(egg);
+                                this.world.add(egg);
+                            }
+                            nearestFood = null; // Consumed
+                        } else {
+                            // Seek Food
+                            moveDir.subVectors(nearestFood.position, e.position).normalize().multiplyScalar(1.0);
                         }
-                    } else if (nearestFood && minDist < 3) {
-                        const dir = nearestFood.position.clone().sub(e.position).normalize();
-                        e.position.x += dir.x * e.userData.moveSpeed;
-                        e.position.z += dir.z * e.userData.moveSpeed;
-                        e.lookAt(new THREE.Vector3(nearestFood.position.x, e.position.y, nearestFood.position.z));
-                    } else {
+                    }
+
+                    if (!nearestFood) {
+                        // Wander Logic
                         e.userData.cooldown = (e.userData.cooldown || 0) - 0.016;
                         if (e.userData.cooldown <= 0) {
                             e.userData.cooldown = 1 + Math.random() * 2;
                             e.userData.wanderDir = new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).normalize();
                         }
-                        if (e.userData.wanderDir) {
-                            e.position.x += e.userData.wanderDir.x * e.userData.moveSpeed * 0.5;
-                            e.position.z += e.userData.wanderDir.z * e.userData.moveSpeed * 0.5;
-                        }
+                        if (e.userData.wanderDir) moveDir.add(e.userData.wanderDir.clone().multiplyScalar(0.7));
                     }
+
+                    // 3. Steering: Obstacle Avoidance & Separation
+                    let separation = new THREE.Vector3();
+                    state.obstacles.forEach(obs => {
+                        if (obs === e) return;
+                        const dist = e.position.distanceTo(obs.position);
+                        const radius = obs.userData.radius || 0.5;
+                        const avoidThreshold = radius + 0.6; // Safety bubble
+                        if (dist < avoidThreshold) {
+                            let push = new THREE.Vector3().subVectors(e.position, obs.position).normalize();
+                            push.multiplyScalar((avoidThreshold - dist) * 2.0); // Stronger push when closer
+                            separation.add(push);
+                        }
+                    });
+
+                    moveDir.add(separation);
+
+                    // 4. Locomotion
+                    if (moveDir.lengthSq() > 0.001) {
+                        moveDir.normalize();
+                        // Smooth rotation (optional, sticking to direct lookAt for responsiveness)
+                        const lookTarget = e.position.clone().add(moveDir);
+                        lookTarget.y = e.position.y;
+                        e.lookAt(lookTarget);
+                        e.position.add(moveDir.multiplyScalar(speed));
+                    }
+
+                    // Bounds Check
                     const boundR = 5.0 * (this.islandGroup ? this.islandGroup.scale.x : 1);
                     if (e.position.x ** 2 + e.position.z ** 2 > boundR ** 2) {
                         const a = Math.atan2(e.position.z, e.position.x);
                         e.position.x = Math.cos(a) * boundR * 0.9;
                         e.position.z = Math.sin(a) * boundR * 0.9;
                     }
+
+                    // Hunger & Death
                     if (e.userData.hunger > 15) {
                         if (!e.userData.bubble) {
                             e.userData.bubble = this.factory.createBubbleTexture('?', '#ff4444');
@@ -453,6 +517,7 @@ export default class GameEngine {
                             this.audio.hungry();
                         }
                     } else if (e.userData.bubble) { e.remove(e.userData.bubble); e.userData.bubble = null; }
+
                     if (e.userData.hunger > 30) {
                         this.audio.die();
                         for (let j = 0; j < 20; j++) this.factory.createParticle(e.position.clone(), e.userData.color, 1.5);
