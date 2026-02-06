@@ -408,44 +408,86 @@ export default class GameEngine {
                 if (e.userData.type === 'creature' && !e.userData.held) {
                     e.userData.age = (e.userData.age || 0) + 0.016;
                     e.userData.hunger = (e.userData.hunger || 0) + 0.016 * 0.1;
+
+                    // 1. Perception: Find Food
                     let nearestFood = null, minDist = Infinity;
-                    state.foods.forEach(f => { const d = e.position.distanceTo(f.position); if (d < minDist) { minDist = d; nearestFood = f; } });
-                    if (nearestFood && minDist < 0.5) {
-                        this.audio.eat();
-                        this.world.remove(nearestFood);
-                        state.foods.splice(state.foods.indexOf(nearestFood), 1);
-                        e.userData.hunger = 0;
-                        e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
-                        for (let j = 0; j < 3; j++) this.factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
-                        if (e.userData.eatenCount >= 3 && e.userData.age > 8) {
-                            e.userData.eatenCount = 0;
-                            this.audio.layEgg();
-                            const egg = this.factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);
-                            state.entities.push(egg);
-                            this.world.add(egg);
+                    state.foods.forEach(f => {
+                        const d = e.position.distanceTo(f.position);
+                        if (d < minDist) { minDist = d; nearestFood = f; }
+                    });
+
+                    // 2. Intent: Determine Base Direction
+                    let moveDir = new THREE.Vector3();
+                    let speed = e.userData.moveSpeed;
+
+                    if (nearestFood && minDist < 6.0) {
+                        if (minDist < 0.5) {
+                            // Eat Logic
+                            this.audio.eat();
+                            this.world.remove(nearestFood);
+                            state.foods.splice(state.foods.indexOf(nearestFood), 1);
+                            e.userData.hunger = 0;
+                            e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
+                            for (let j = 0; j < 3; j++) this.factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
+                            if (e.userData.eatenCount >= 3 && e.userData.age > 8) {
+                                e.userData.eatenCount = 0;
+                                this.audio.layEgg();
+                                const egg = this.factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);
+                                state.entities.push(egg);
+                                this.world.add(egg);
+                            }
+                            nearestFood = null; // Consumed
+                        } else {
+                            // Seek Food
+                            moveDir.subVectors(nearestFood.position, e.position).normalize().multiplyScalar(1.0);
                         }
-                    } else if (nearestFood && minDist < 3) {
-                        const dir = nearestFood.position.clone().sub(e.position).normalize();
-                        e.position.x += dir.x * e.userData.moveSpeed;
-                        e.position.z += dir.z * e.userData.moveSpeed;
-                        e.lookAt(new THREE.Vector3(nearestFood.position.x, e.position.y, nearestFood.position.z));
-                    } else {
+                    }
+
+                    if (!nearestFood) {
+                        // Wander Logic
                         e.userData.cooldown = (e.userData.cooldown || 0) - 0.016;
                         if (e.userData.cooldown <= 0) {
                             e.userData.cooldown = 1 + Math.random() * 2;
                             e.userData.wanderDir = new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).normalize();
                         }
-                        if (e.userData.wanderDir) {
-                            e.position.x += e.userData.wanderDir.x * e.userData.moveSpeed * 0.5;
-                            e.position.z += e.userData.wanderDir.z * e.userData.moveSpeed * 0.5;
-                        }
+                        if (e.userData.wanderDir) moveDir.add(e.userData.wanderDir.clone().multiplyScalar(0.7));
                     }
+
+                    // 3. Steering: Obstacle Avoidance & Separation
+                    let separation = new THREE.Vector3();
+                    state.obstacles.forEach(obs => {
+                        if (obs === e) return;
+                        const dist = e.position.distanceTo(obs.position);
+                        const radius = obs.userData.radius || 0.5;
+                        const avoidThreshold = radius + 0.6; // Safety bubble
+                        if (dist < avoidThreshold) {
+                            let push = new THREE.Vector3().subVectors(e.position, obs.position).normalize();
+                            push.multiplyScalar((avoidThreshold - dist) * 2.0); // Stronger push when closer
+                            separation.add(push);
+                        }
+                    });
+
+                    moveDir.add(separation);
+
+                    // 4. Locomotion
+                    if (moveDir.lengthSq() > 0.001) {
+                        moveDir.normalize();
+                        // Smooth rotation (optional, sticking to direct lookAt for responsiveness)
+                        const lookTarget = e.position.clone().add(moveDir);
+                        lookTarget.y = e.position.y;
+                        e.lookAt(lookTarget);
+                        e.position.add(moveDir.multiplyScalar(speed));
+                    }
+
+                    // Bounds Check
                     const boundR = 5.0 * (this.islandGroup ? this.islandGroup.scale.x : 1);
                     if (e.position.x ** 2 + e.position.z ** 2 > boundR ** 2) {
                         const a = Math.atan2(e.position.z, e.position.x);
                         e.position.x = Math.cos(a) * boundR * 0.9;
                         e.position.z = Math.sin(a) * boundR * 0.9;
                     }
+
+                    // Hunger & Death
                     if (e.userData.hunger > 15) {
                         if (!e.userData.bubble) {
                             e.userData.bubble = this.factory.createBubbleTexture('?', '#ff4444');
@@ -453,6 +495,7 @@ export default class GameEngine {
                             this.audio.hungry();
                         }
                     } else if (e.userData.bubble) { e.remove(e.userData.bubble); e.userData.bubble = null; }
+
                     if (e.userData.hunger > 30) {
                         this.audio.die();
                         for (let j = 0; j < 20; j++) this.factory.createParticle(e.position.clone(), e.userData.color, 1.5);
