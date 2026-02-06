@@ -8,6 +8,7 @@ import WorldManager from './WorldManager.js';
 import EntityFactory from './EntityFactory.js';
 import InputHandler from './InputHandler.js';
 import PlayerController from './PlayerController.js';
+import ChatManager from './ChatManager.js';
 
 export default class GameEngine {
     constructor() {
@@ -21,10 +22,12 @@ export default class GameEngine {
         this.groundPlanes = [];   // Ground meshes for raycasting
         this.waterMesh = null;    // Reference to main water mesh
         this.logs = [];           // Logs placed on water
+        this.clouds = [];         // Clouds in the sky
         this.boatPromptVisible = false;
         this._nearestBoat = null;
         this.ui = {};
         this.setupUI();
+        this.chatManager = new ChatManager(this); // Initialize AFTER setupUI
         this.input = new InputHandler(this);
         this.setupButtons();
         this.initGame(null);
@@ -88,6 +91,34 @@ export default class GameEngine {
         return false;
     }
 
+    addAxeToInventory() {
+        const state = this.state;
+        const emptyIdx = state.inventory.findIndex(item => item === null);
+        if (emptyIdx !== -1) {
+            state.inventory[emptyIdx] = { type: 'axe', color: new THREE.Color(0x5d4037), count: 1 };
+            this.updateInventory();
+            return true;
+        }
+        return false;
+    }
+
+    pickAxeFromInventory() {
+        const state = this.state;
+        for (let i = 0; i < 8; i++) {
+            if (state.inventory[i] && state.inventory[i].type === 'axe') {
+                state.inventory[i] = null;
+                this.updateInventory();
+                return i;
+            }
+        }
+        return null;
+    }
+
+    hasAxeInInventory() {
+        const state = this.state;
+        return state.inventory.some(item => item && item.type === 'axe');
+    }
+
     updateInventory() {
         const slots = document.querySelectorAll('.slot');
         slots.forEach((el, i) => {
@@ -101,6 +132,7 @@ export default class GameEngine {
                 if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
                 if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
                 if (it.type === 'wood' || it.type === 'log') d.style.background = d.style.color;
+                if (it.type === 'axe') d.style.background = d.style.color;
                 el.appendChild(d);
                 if (it.count > 1) {
                     const countEl = document.createElement('span');
@@ -137,6 +169,7 @@ export default class GameEngine {
         });
         this.state.entities = []; this.state.obstacles = []; this.state.foods = [];
         this.state.heldAxe = null;
+        this.state.heldPickaxe = null;
         // Remove island groups
         this.islandGroups.forEach(ig => {
             ig.group.children.forEach(c => {
@@ -177,7 +210,8 @@ export default class GameEngine {
         this.state.islands.push({
             center: new THREE.Vector3(0, 0, 0),
             radius: island1.radius,
-            floorY: O_Y + 0.05
+            floorY: O_Y + 0.05,
+            name: "STARTING SHORE"
         });
         // Get water mesh reference for boat placement
         this.waterMesh = island1.group.children.find(c => c.userData.type === 'water');
@@ -211,6 +245,12 @@ export default class GameEngine {
             this.world.add(c);
         }
 
+        // Spawn Chief Ruru on Island 1
+        const chiefPos = rndPolar(0, 0, 3.0, 6.0);
+        const chief = this.factory.createChief(this.state.palette, chiefPos.x, chiefPos.z);
+        this.state.entities.push(chief);
+        this.world.add(chief);
+
         // Axe placed randomly on island 1
         const axePos = rndPolar(0, 0, 2.0, 9.0);
         const axe = this.factory.createAxe(this.state.palette, axePos.x, axePos.z);
@@ -226,14 +266,22 @@ export default class GameEngine {
         this.state.islands.push({
             center: new THREE.Vector3(80, 0, 0),
             radius: island2.radius,
-            floorY: O_Y + 0.05
+            floorY: O_Y + 0.05,
+            name: "FLORA HAVEN"
         });
         // Vegetation on island 2
-        for (let i = 0; i < 6; i++) { const p = rndPolar(80, 0, 2.0, 11.0); const e = this.factory.createTree(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
-        for (let i = 0; i < 4; i++) { const p = rndPolar(80, 0, 1.5, 11.0); const e = this.factory.createBush(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 18; i++) { const p = rndPolar(80, 0, 2.0, 11.0); const e = this.factory.createTree(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 12; i++) { const p = rndPolar(80, 0, 1.5, 11.0); const e = this.factory.createBush(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 4; i++) { const p = rndPolar(80, 0, 1.5, 11.0); const e = this.factory.createRock(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 20; i++) { const p = rndPolar(80, 0, 0.5, 12.0); const e = this.factory.createGrass(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 6; i++) { const p = rndPolar(80, 0, 1.0, 11.0); const e = this.factory.createFlower(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+
+        // Pickaxe on island 2
+        const pickPos = rndPolar(80, 0, 2.0, 10.0);
+        const pickaxe = this.factory.createPickaxe(palette2, pickPos.x, pickPos.z);
+        this.state.entities.push(pickaxe);
+        this.world.add(pickaxe);
+
         // Creatures on island 2
         for (let i = 0; i < 3; i++) {
             const p = rndPolar(80, 0, 2.0, 9.0);
@@ -242,6 +290,122 @@ export default class GameEngine {
             c.userData.boundRadius = island2.radius * 0.85;
             this.state.entities.push(c);
             this.world.add(c);
+        }
+
+        // --- Island 3: The Ancient Island (Bigger, Mountain, Golem) ---
+        const palette3 = this.factory.generatePalette('blue');
+        const island3 = this.factory.createIslandAt(palette3, 0, 110, 28, false);
+        this.world.add(island3.group);
+        this.islandGroups.push(island3);
+        this.groundPlanes.push(island3.groundPlane);
+        this.state.islands.push({
+            center: new THREE.Vector3(0, 0, 110),
+            radius: island3.radius,
+            floorY: O_Y + 0.05,
+            name: "ANCIENT PEAKS"
+        });
+
+        // Mountain in the center (climbable)
+        const mountain = this.factory.createMountain(palette3, 0, 110, 1.5);
+        this.world.add(mountain);
+        this.state.entities.push(mountain);
+        mountain.userData.isMountain = true;
+        mountain.userData.mountRadius = 15.0;
+        mountain.userData.mountHeight = 18.0;
+
+        // Stone Golem near the mountain
+        const golem = this.factory.createStoneGolem(palette3, 0, 127);
+        this.world.add(golem);
+        this.state.entities.push(golem);
+
+        // Bigger rocks on island 3
+        for (let i = 0; i < 8; i++) {
+            const p = rndPolar(0, 110, 18.0, 26.0);
+            const rock = this.factory.createRock(palette3, p.x, p.z);
+            rock.scale.set(3, 3, 3);
+            this.state.entities.push(rock);
+            this.world.add(rock);
+            this.state.obstacles.push(rock);
+        }
+
+        // Gold rocks on the edges of island 3 (mineable with pickaxe)
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const r = island3.radius * 0.9;
+            const px = 0 + Math.cos(angle) * r;
+            const pz = 110 + Math.sin(angle) * r;
+            const scale = (2.5 + Math.random() * 1.5) * 0.2;
+            const goldRock = this.factory.createGoldRock(palette3, px, pz, scale);
+            this.state.entities.push(goldRock);
+            this.world.add(goldRock);
+        }
+
+        // Vegetation for island 3 (Outside mountain radius)
+        for (let i = 0; i < 10; i++) { const p = rndPolar(0, 110, 17.0, 26.0); const e = this.factory.createTree(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 40; i++) { const p = rndPolar(0, 110, 17.0, 27.0); const e = this.factory.createGrass(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 12; i++) { const p = rndPolar(0, 110, 17.0, 22.0); const e = this.factory.createFlower(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+
+        // --- Island 4: Fourth island ---
+        const palette4 = this.factory.generatePalette(null);
+        const island4 = this.factory.createIslandAt(palette4, -90, -50, 11, false);
+        this.world.add(island4.group);
+        this.islandGroups.push(island4);
+        this.groundPlanes.push(island4.groundPlane);
+        this.state.islands.push({
+            center: new THREE.Vector3(-90, 0, -50),
+            radius: island4.radius,
+            floorY: O_Y + 0.05,
+            name: "ROCKY OUTPOST"
+        });
+        for (let i = 0; i < 4; i++) { const p = rndPolar(-90, -50, 2.0, 8.0); const e = this.factory.createTree(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 3; i++) { const p = rndPolar(-90, -50, 1.5, 8.0); const e = this.factory.createBush(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 3; i++) { const p = rndPolar(-90, -50, 1.5, 8.0); const e = this.factory.createRock(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 12; i++) { const p = rndPolar(-90, -50, 0.5, 9.0); const e = this.factory.createGrass(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 4; i++) { const p = rndPolar(-90, -50, 1.0, 8.0); const e = this.factory.createFlower(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 2; i++) {
+            const p = rndPolar(-90, -50, 2.0, 6.0);
+            const c = this.factory.createCreature(palette4, p.x, p.z);
+            c.userData.boundCenter = { x: -90, z: -50 };
+            c.userData.boundRadius = island4.radius * 0.85;
+            this.state.entities.push(c);
+            this.world.add(c);
+        }
+
+        // --- Island 5: Fifth island ---
+        const palette5 = this.factory.generatePalette(null);
+        const island5 = this.factory.createIslandAt(palette5, 50, -100, 13, false);
+        this.world.add(island5.group);
+        this.islandGroups.push(island5);
+        this.groundPlanes.push(island5.groundPlane);
+        this.state.islands.push({
+            center: new THREE.Vector3(50, 0, -100),
+            radius: island5.radius,
+            floorY: O_Y + 0.05,
+            name: "DISTANT SHORES"
+        });
+        for (let i = 0; i < 5; i++) { const p = rndPolar(50, -100, 2.0, 10.0); const e = this.factory.createTree(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 4; i++) { const p = rndPolar(50, -100, 1.5, 10.0); const e = this.factory.createBush(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 4; i++) { const p = rndPolar(50, -100, 1.5, 10.0); const e = this.factory.createRock(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 18; i++) { const p = rndPolar(50, -100, 0.5, 11.0); const e = this.factory.createGrass(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 5; i++) { const p = rndPolar(50, -100, 1.0, 10.0); const e = this.factory.createFlower(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 3; i++) {
+            const p = rndPolar(50, -100, 2.0, 8.0);
+            const c = this.factory.createCreature(palette5, p.x, p.z);
+            c.userData.boundCenter = { x: 50, z: -100 };
+            c.userData.boundRadius = island5.radius * 0.85;
+            this.state.entities.push(c);
+            this.world.add(c);
+        }
+
+        // Global clouds scattered across the entire map
+        for (let i = 0; i < 40; i++) {
+            const cx = (Math.random() - 0.5) * 300;
+            const cz = (Math.random() - 0.5) * 300;
+            const cloud = this.factory.createCloud(cx, 15 + Math.random() * 15, cz);
+            cloud.scale.set(1, 1, 1);
+            cloud.userData.speed = 0.5 + Math.random() * 1.5;
+            this.world.add(cloud);
+            this.clouds.push(cloud);
         }
 
         // --- Spawn player on island 1 ---
@@ -718,7 +882,7 @@ export default class GameEngine {
         if (pc.playerGroup) {
             // Place player on the deck (deck is at y=-1.42 in boat local space)
             pc.playerGroup.position.copy(boat.position);
-            pc.playerGroup.position.y = boat.position.y - 1.20  ;
+            pc.playerGroup.position.y = boat.position.y - 1.20;
             // Sit slightly toward the stern so they're behind the mast
             const bowDir = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
             pc.playerGroup.position.x -= bowDir.x * 0.6;
@@ -850,6 +1014,79 @@ export default class GameEngine {
         }
     }
 
+    updateMining(dt) {
+        const state = this.state;
+        if (!state.isMining || !state.interactionTarget) return;
+
+        const rock = state.interactionTarget;
+        const dx = rock.position.x - state.player.pos.x;
+        const dz = rock.position.z - state.player.pos.z;
+        if (Math.sqrt(dx * dx + dz * dz) > 3.5) {
+            state.isMining = false;
+            state.mineProgress = 0;
+            return;
+        }
+
+        state.mineTimer += dt;
+
+        // Show chop indicator reused for mining (or make a new one, but reusing is simpler for now)
+        if (this.ui.chopIndicator) {
+            this.ui.chopIndicator.style.display = 'block';
+            if (this.ui.chopFill) {
+                this.ui.chopFill.style.width = ((state.mineProgress / 5) * 100) + '%';
+                this.ui.chopFill.style.background = '#aaaaaa'; // Grey for stone
+            }
+        }
+
+        if (state.mineTimer >= 0.4) {
+            state.mineTimer = 0;
+            state.mineProgress++;
+            this.audio.chop(); // Reuse chop sound or add pick sound
+
+            const shakeX = (Math.random() - 0.5) * 0.15;
+            const origX = rock.position.x;
+            rock.position.x += shakeX;
+            setTimeout(() => { if (rock.parent) rock.position.x = origX; }, 100);
+
+            this.factory.createChopParticles(rock.position.clone(), rock.userData.color || new THREE.Color(0x888888));
+
+            if (state.mineProgress >= 5) {
+                this.audio.treeFall(); // Reuse heavy thud
+
+                // Spawn resources
+                const dropCount = 3;
+                const dropType = rock.userData.type === 'gold_rock' ? 'rock' : 'rock'; // We use 'rock' type for both but color distinguishes them
+                const dropColor = rock.userData.type === 'gold_rock' ? new THREE.Color(0xffd700) : (rock.userData.color || new THREE.Color(0x888888));
+
+                for (let i = 0; i < dropCount; i++) {
+                    const drop = new THREE.Mesh(new THREE.DodecahedronGeometry(0.15), this.world.getMat(dropColor));
+                    drop.userData = { type: dropType, color: dropColor, autoPickup: true };
+                    drop.position.copy(rock.position);
+                    drop.position.y += 0.5;
+                    drop.position.x += (Math.random() - 0.5) * 0.8;
+                    drop.position.z += (Math.random() - 0.5) * 0.8;
+                    this.world.add(drop);
+                    state.entities.push(drop);
+
+                    // Add small velocity for "pop" effect
+                    // We don't have physics loop for these small items except simple pickup, so they just sit there.
+                }
+
+                // Remove rock
+                this.world.remove(rock);
+                const idx = state.entities.indexOf(rock);
+                if (idx > -1) state.entities.splice(idx, 1);
+                if (state.obstacles.includes(rock)) state.obstacles.splice(state.obstacles.indexOf(rock), 1);
+
+                state.isMining = false;
+                state.mineProgress = 0;
+                state.interactionTarget = null;
+                if (this.ui.chopIndicator) this.ui.chopIndicator.style.display = 'none';
+                if (this.ui.chopFill) this.ui.chopFill.style.background = '#ff8800'; // Reset color
+            }
+        }
+    }
+
     // --- Auto-pickup system ---
     updateAutoPickup() {
         const state = this.state;
@@ -903,6 +1140,39 @@ export default class GameEngine {
         this._nearestBoat = nearBoat;
     }
 
+    updateIslandIndicator() {
+        const state = this.state;
+        const playerPos = state.isOnBoat ? state.activeBoat.position : state.player.pos;
+        let currentIsland = null;
+
+        for (const island of state.islands) {
+            const dx = playerPos.x - island.center.x;
+            const dz = playerPos.z - island.center.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < island.radius + 5) {
+                currentIsland = island;
+                break;
+            }
+        }
+
+        if (currentIsland) {
+            if (state.lastIslandName !== currentIsland.name) {
+                state.lastIslandName = currentIsland.name;
+                if (this.ui.islandIndicator) {
+                    this.ui.islandIndicator.textContent = currentIsland.name;
+                    this.ui.islandIndicator.style.display = 'block';
+                    // Hide after a few seconds
+                    if (this.islandIndicatorTimeout) clearTimeout(this.islandIndicatorTimeout);
+                    this.islandIndicatorTimeout = setTimeout(() => {
+                        this.ui.islandIndicator.style.display = 'none';
+                    }, 4000);
+                }
+            }
+        } else {
+            state.lastIslandName = null;
+        }
+    }
+
     animate(t) {
         requestAnimationFrame(this.animate);
         t *= 0.001;
@@ -927,6 +1197,14 @@ export default class GameEngine {
                 if (e.userData.type === 'log') {
                     e.position.y = Math.sin(t * 2 + e.position.x * 0.5) * 0.08 - 0.1;
                     e.rotation.z = Math.PI / 2 + Math.sin(t * 1.2 + e.position.z) * 0.05;
+                }
+            });
+
+            // --- Cloud animation ---
+            this.clouds.forEach(cloud => {
+                cloud.position.x += cloud.userData.speed * dt;
+                if (cloud.position.x > 200) {
+                    cloud.position.x = -200;
                 }
             });
 
@@ -957,14 +1235,36 @@ export default class GameEngine {
                 this.playerController.updateCamera(camera);
                 this.input.updateInteraction();
                 this.updateChopping(dt);
+                this.updateMining(dt);
                 this.updateAutoPickup();
                 this.updateBoatProximity();
             }
+
+            this.updateIslandIndicator();
 
             // --- Entity updates ---
             for (let i = state.entities.length - 1; i >= 0; i--) {
                 const e = state.entities[i];
                 if (e.scale.x < 0.99) e.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
+
+                // Golem Animation
+                if (e.userData.type === 'golem') {
+                    const time = t * 2;
+                    e.position.y = this.factory.O_Y + 2.2 + Math.sin(time) * 0.1;
+                    if (e.userData.lArm) e.userData.lArm.rotation.x = Math.sin(time) * 0.15;
+                    if (e.userData.rArm) e.userData.rArm.rotation.x = Math.cos(time) * 0.15;
+                    if (e.userData.legs) {
+                        e.userData.legs.forEach((leg, idx) => {
+                            leg.scale.y = 1 + Math.sin(time + idx) * 0.05;
+                        });
+                    }
+                    // Look at player if near
+                    if (state.player.pos.distanceTo(e.position) < 15) {
+                        const targetPos = state.player.pos.clone();
+                        targetPos.y = e.position.y;
+                        e.lookAt(targetPos);
+                    }
+                }
 
                 if (e.userData.type === 'creature' || e.userData.type === 'chief') {
                     e.position.y = O_Y + 0.3 + Math.sin(t * 4 + (e.userData.hopOffset || 0)) * 0.03;

@@ -184,6 +184,64 @@ export default class PlayerController {
         // Apply validated position
         player.pos.copy(nextPos);
 
+        // --- Obstacle Collision (Simple circle push-out + Mountain Climbing) ---
+        const playerRadius = 0.4;
+        let groundHeightOverride = null;
+
+        for (const obs of state.obstacles) {
+            // Mountain Climbing Logic
+            if (obs.userData.isMountain) {
+                const dx = player.pos.x - obs.position.x;
+                const dz = player.pos.z - obs.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                const maxR = obs.userData.mountRadius;
+                if (dist < maxR) {
+                    // Simple linear cone height approximation
+                    // height at center = mountHeight + base_y
+                    // height at edge = base_y
+                    // y = base_y + mountHeight * (1 - dist/maxR)
+                    // base_y is usually -1.4 (O_Y)
+                    const base_y = -1.4;
+                    const h = base_y + obs.userData.mountHeight * (1 - dist / maxR);
+                    
+                    // If we are above (or slightly below) the mountain surface, snap to it
+                    // Check if player is somewhat near the surface to snap
+                    if (player.pos.y > h - 1.0) {
+                        groundHeightOverride = h;
+                    }
+                }
+                continue; // Don't process as a wall
+            }
+
+            if (!obs.userData.radius) continue;
+            const dx = player.pos.x - obs.position.x;
+            const dz = player.pos.z - obs.position.z;
+            const distSq = dx * dx + dz * dz;
+            const minDist = playerRadius + obs.userData.radius;
+            if (distSq < minDist * minDist) {
+                const dist = Math.sqrt(distSq);
+                const overlap = minDist - dist;
+                if (dist > 0.001) {
+                    const pushX = (dx / dist) * overlap;
+                    const pushZ = (dz / dist) * overlap;
+                    player.pos.x += pushX;
+                    player.pos.z += pushZ;
+                }
+            }
+        }
+
+        // Apply mountain height if active
+        if (groundHeightOverride !== null) {
+             // Only snap if we are falling or walking on it
+             if (player.pos.y < groundHeightOverride + 0.5) {
+                player.pos.y = groundHeightOverride;
+                player.vel.y = 0;
+                player.onGround = true;
+                // Update playerGroup immediately to avoid jitter
+                this.playerGroup.position.copy(player.pos);
+             }
+        }
+
         // Jump
         if (player.onGround && state.inputs.space) {
             player.vel.y = 0.2;

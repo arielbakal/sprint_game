@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stone Golem - Realistic Low Poly</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; }
+        canvas { display: block; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: #b0bec5;
+            font-family: sans-serif;
+            font-weight: bold;
+            pointer-events: none;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">STONE GOLEM</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- 1. Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x263238); // Dark slate background
+        // Add some fog for depth
+        scene.fog = new THREE.Fog(0x263238, 5, 20);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1, 6.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true; // Enable real shadows
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. Lighting (Standard) ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+
+        // Main Key Light
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(5, 8, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        // Fill Light (Blueish for sky reflection)
+        const fillLight = new THREE.DirectionalLight(0x90caf9, 0.5);
+        fillLight.position.set(-5, 3, -5);
+        scene.add(fillLight);
+
+        // --- 3. Helper Functions ---
+
+        // Distorts vertices to look like hand-chiseled rock
+        function distortGeometry(geometry, intensity) {
+            const posAttribute = geometry.attributes.position;
+            for (let i = 0; i < posAttribute.count; i++) {
+                const x = posAttribute.getX(i);
+                const y = posAttribute.getY(i);
+                const z = posAttribute.getZ(i);
+                posAttribute.setX(i, x + (Math.random() - 0.5) * intensity);
+                posAttribute.setY(i, y + (Math.random() - 0.5) * intensity);
+                posAttribute.setZ(i, z + (Math.random() - 0.5) * intensity);
+            }
+            geometry.computeVertexNormals();
+            return geometry;
+        }
+
+        // --- 4. Materials (Standard PBR) ---
+        // Using StandardMaterial allows the light to interact with the angles (flat shading)
+        const stoneMat = new THREE.MeshStandardMaterial({ 
+            color: 0x78909c, 
+            roughness: 0.9, 
+            metalness: 0.1,
+            flatShading: true 
+        });
+        
+        const darkStoneMat = new THREE.MeshStandardMaterial({ 
+            color: 0x455a64, 
+            roughness: 1.0,
+            flatShading: true 
+        });
+
+        const eyeWhiteMat = new THREE.MeshStandardMaterial({ 
+            color: 0xffffff, 
+            roughness: 0.4,
+            flatShading: true 
+        });
+
+        const eyePupilMat = new THREE.MeshStandardMaterial({ 
+            color: 0x111111, 
+            roughness: 0.1 
+        });
+
+        // --- 5. Building the Golem ---
+        const golemGroup = new THREE.Group();
+
+        // A. The Main Body (Big Head)
+        const bodyGeo = new THREE.BoxGeometry(2.5, 3.2, 1.8, 8, 8, 8);
+        distortGeometry(bodyGeo, 0.06);
+        const body = new THREE.Mesh(bodyGeo, stoneMat);
+        body.castShadow = true;
+        body.receiveShadow = true;
+        golemGroup.add(body);
+
+        // B. The Nose (Big Rectangle)
+        const noseGeo = new THREE.BoxGeometry(0.8, 1.4, 0.5, 4, 4, 4);
+        distortGeometry(noseGeo, 0.03);
+        const nose = new THREE.Mesh(noseGeo, stoneMat);
+        nose.position.set(0, 0.2, 1.0); 
+        nose.castShadow = true;
+        nose.receiveShadow = true;
+        golemGroup.add(nose);
+
+        // C. The Mouth (Slit)
+        const mouthGeo = new THREE.BoxGeometry(1.6, 0.15, 0.2, 4, 1, 1);
+        distortGeometry(mouthGeo, 0.02);
+        const mouth = new THREE.Mesh(mouthGeo, darkStoneMat);
+        mouth.position.set(0, -0.9, 0.9);
+        mouth.castShadow = true;
+        golemGroup.add(mouth);
+
+        // D. Eyes Group
+        const createEye = (xDir) => {
+            const eyeGroup = new THREE.Group();
+            
+            // White part
+            const whiteGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.2, 12);
+            whiteGeo.rotateX(Math.PI / 2); 
+            distortGeometry(whiteGeo, 0.02);
+            const white = new THREE.Mesh(whiteGeo, eyeWhiteMat);
+            white.castShadow = true;
+            eyeGroup.add(white);
+
+            // Pupil
+            const pupilGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.25, 8);
+            pupilGeo.rotateX(Math.PI / 2);
+            const pupil = new THREE.Mesh(pupilGeo, eyePupilMat);
+            pupil.position.z = 0.05;
+            eyeGroup.add(pupil);
+
+            // Eyebrow (Angled Box)
+            const browGeo = new THREE.BoxGeometry(0.9, 0.25, 0.4, 4, 2, 2);
+            distortGeometry(browGeo, 0.04);
+            const brow = new THREE.Mesh(browGeo, darkStoneMat);
+            brow.position.set(0, 0.5, 0.1);
+            brow.rotation.z = xDir * -0.4; 
+            brow.castShadow = true;
+            eyeGroup.add(brow);
+
+            eyeGroup.position.set(xDir * 0.9, 0.8, 0.9);
+            return eyeGroup;
+        };
+
+        golemGroup.add(createEye(-1)); 
+        golemGroup.add(createEye(1));  
+
+        // E. Arms
+        const createArm = (xDir) => {
+            const armGeo = new THREE.BoxGeometry(0.6, 2.2, 0.8, 4, 6, 4);
+            distortGeometry(armGeo, 0.05);
+            const arm = new THREE.Mesh(armGeo, stoneMat);
+            arm.castShadow = true;
+            arm.receiveShadow = true;
+            arm.position.set(0, -0.5, 0); 
+            
+            const pivot = new THREE.Group();
+            pivot.add(arm);
+            
+            pivot.position.set(xDir * 1.8, 0.5, 0);
+            return { mesh: arm, pivot: pivot };
+        };
+
+        const leftArm = createArm(-1);
+        const rightArm = createArm(1);
+        golemGroup.add(leftArm.pivot);
+        golemGroup.add(rightArm.pivot);
+
+        // F. Legs (4 stumps)
+        const legs = [];
+        const createLeg = (x, z) => {
+            const legGeo = new THREE.BoxGeometry(0.6, 0.8, 0.6, 4, 3, 4);
+            distortGeometry(legGeo, 0.05);
+            const leg = new THREE.Mesh(legGeo, stoneMat);
+            leg.position.set(x, -2.0, z); 
+            leg.castShadow = true;
+            leg.receiveShadow = true;
+            golemGroup.add(leg);
+            legs.push(leg);
+        };
+
+        createLeg(-0.8, 0.5);  // Front Left
+        createLeg(0.8, 0.5);   // Front Right
+        createLeg(-0.8, -0.5); // Back Left
+        createLeg(0.8, -0.5);  // Back Right
+
+        scene.add(golemGroup);
+
+        // --- 6. Animation ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        let time = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.03;
+
+            // Idle Animation
+            golemGroup.position.y = Math.sin(time) * 0.1;
+
+            // Arm Swing
+            leftArm.pivot.rotation.x = Math.sin(time) * 0.15;
+            rightArm.pivot.rotation.x = Math.cos(time) * 0.15;
+
+            // Leg Compress
+            legs.forEach((leg, index) => {
+                const offset = index * 1.5;
+                leg.scale.y = 1 + Math.sin(time + offset) * 0.05;
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
