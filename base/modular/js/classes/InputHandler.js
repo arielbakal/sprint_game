@@ -313,11 +313,12 @@ export default class InputHandler {
 
             if (root.userData.type === 'chief') {
                 document.exitPointerLock();
+                // Close old dialog if open
                 const d = document.getElementById('dialog-box');
-                if (d) {
-                    d.style.display = 'flex';
-                    document.getElementById('dialog-text').innerHTML = "CHIEF:<br>This island is my home.<br>You're welcome to stay!";
-                }
+                if (d) d.style.display = 'none';
+
+                // Open Chat
+                this.engine.chatManager.openChat(root);
                 sfx.sing();
                 return;
             }

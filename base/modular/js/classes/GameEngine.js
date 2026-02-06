@@ -8,10 +8,12 @@ import WorldManager from './WorldManager.js';
 import EntityFactory from './EntityFactory.js';
 import InputHandler from './InputHandler.js';
 import PlayerController from './PlayerController.js';
+import ChatManager from './ChatManager.js';
 
 export default class GameEngine {
     constructor() {
         this.audio = new AudioManager();
+        this.chatManager = new ChatManager(this); // Initialize before listeners
         this.state = new GameState();
         this.world = new WorldManager(0.5);
         this.factory = new EntityFactory(this.world, this.state);
@@ -210,6 +212,12 @@ export default class GameEngine {
             this.state.entities.push(c);
             this.world.add(c);
         }
+
+        // Spawn Chief Ruru on Island 1
+        const chiefPos = rndPolar(0, 0, 3.0, 6.0);
+        const chief = this.factory.createChief(this.state.palette, chiefPos.x, chiefPos.z);
+        this.state.entities.push(chief);
+        this.world.add(chief);
 
         // Axe placed randomly on island 1
         const axePos = rndPolar(0, 0, 2.0, 9.0);
@@ -718,7 +726,7 @@ export default class GameEngine {
         if (pc.playerGroup) {
             // Place player on the deck (deck is at y=-1.42 in boat local space)
             pc.playerGroup.position.copy(boat.position);
-            pc.playerGroup.position.y = boat.position.y - 1.20  ;
+            pc.playerGroup.position.y = boat.position.y - 1.20;
             // Sit slightly toward the stern so they're behind the mast
             const bowDir = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
             pc.playerGroup.position.x -= bowDir.x * 0.6;

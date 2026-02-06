@@ -236,7 +236,7 @@ export default class EntityFactory {
         const e2 = new THREE.Mesh(eyeGeo, eyeMat); e2.position.set(-0.15, 0.7, 0.25);
         g.add(body, crown, e1, e2);
         g.position.set(x, this.O_Y + 0.3, z);
-        g.userData = { type: 'chief', radius: 0.6, moveSpeed: 0.045, color: color, fleeTimer: 0 };
+        g.userData = { type: 'chief', name: 'Chief Ruru', loreFile: 'data/chief_lore.txt', canChat: true, radius: 0.6, moveSpeed: 0.045, color: color, fleeTimer: 0 };
         this.state.obstacles.push(g);
         return g;
     }
