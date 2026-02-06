@@ -22,6 +22,7 @@ export default class GameEngine {
         this.groundPlanes = [];   // Ground meshes for raycasting
         this.waterMesh = null;    // Reference to main water mesh
         this.logs = [];           // Logs placed on water
+        this.clouds = [];         // Clouds in the sky
         this.boatPromptVisible = false;
         this._nearestBoat = null;
         this.ui = {};
@@ -402,7 +403,9 @@ export default class GameEngine {
             const cz = (Math.random() - 0.5) * 300;
             const cloud = this.factory.createCloud(cx, 15 + Math.random() * 15, cz);
             cloud.scale.set(1, 1, 1);
+            cloud.userData.speed = 0.5 + Math.random() * 1.5;
             this.world.add(cloud);
+            this.clouds.push(cloud);
         }
 
         // --- Spawn player on island 1 ---
@@ -1194,6 +1197,14 @@ export default class GameEngine {
                 if (e.userData.type === 'log') {
                     e.position.y = Math.sin(t * 2 + e.position.x * 0.5) * 0.08 - 0.1;
                     e.rotation.z = Math.PI / 2 + Math.sin(t * 1.2 + e.position.z) * 0.05;
+                }
+            });
+
+            // --- Cloud animation ---
+            this.clouds.forEach(cloud => {
+                cloud.position.x += cloud.userData.speed * dt;
+                if (cloud.position.x > 200) {
+                    cloud.position.x = -200;
                 }
             });
 
