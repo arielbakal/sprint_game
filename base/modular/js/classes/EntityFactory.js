@@ -101,22 +101,19 @@ export default class EntityFactory {
         const eyeWhiteMat = this.getMat(0xffffff);
         const eyePupilMat = this.getMat(0x111111);
 
-        // A. Body
-        const bodyGeo = new THREE.BoxGeometry(2.5, 3.2, 1.8, 4, 4, 4);
-        this.distortGeometry(bodyGeo, 0.1);
+        // A. Body - Simple Box
+        const bodyGeo = new THREE.BoxGeometry(2.5, 3.2, 1.8);
         const body = new THREE.Mesh(bodyGeo, stoneMat);
         g.add(body);
 
         // B. Nose
-        const noseGeo = new THREE.BoxGeometry(0.8, 1.4, 0.5, 2, 2, 2);
-        this.distortGeometry(noseGeo, 0.05);
+        const noseGeo = new THREE.BoxGeometry(0.8, 1.4, 0.5);
         const nose = new THREE.Mesh(noseGeo, stoneMat);
         nose.position.set(0, 0.2, 1.0);
         g.add(nose);
 
         // C. Mouth
-        const mouthGeo = new THREE.BoxGeometry(1.6, 0.15, 0.2, 2, 1, 1);
-        this.distortGeometry(mouthGeo, 0.03);
+        const mouthGeo = new THREE.BoxGeometry(1.6, 0.15, 0.2);
         const mouth = new THREE.Mesh(mouthGeo, darkStoneMat);
         mouth.position.set(0, -0.9, 0.9);
         g.add(mouth);
@@ -126,7 +123,6 @@ export default class EntityFactory {
             const eyeGroup = new THREE.Group();
             const whiteGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.2, 8);
             whiteGeo.rotateX(Math.PI / 2);
-            this.distortGeometry(whiteGeo, 0.03);
             const white = new THREE.Mesh(whiteGeo, eyeWhiteMat);
             eyeGroup.add(white);
             const pupilGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.25, 6);
@@ -134,8 +130,7 @@ export default class EntityFactory {
             const pupil = new THREE.Mesh(pupilGeo, eyePupilMat);
             pupil.position.z = 0.05;
             eyeGroup.add(pupil);
-            const browGeo = new THREE.BoxGeometry(0.9, 0.25, 0.4, 2, 2, 2);
-            this.distortGeometry(browGeo, 0.05);
+            const browGeo = new THREE.BoxGeometry(0.9, 0.25, 0.4);
             const brow = new THREE.Mesh(browGeo, darkStoneMat);
             brow.position.set(0, 0.5, 0.1);
             brow.rotation.z = xDir * -0.4;
@@ -147,8 +142,7 @@ export default class EntityFactory {
 
         // E. Arms
         const createArm = (xDir) => {
-            const armGeo = new THREE.BoxGeometry(0.6, 2.2, 0.8, 2, 4, 2);
-            this.distortGeometry(armGeo, 0.1);
+            const armGeo = new THREE.BoxGeometry(0.6, 2.2, 0.8);
             const arm = new THREE.Mesh(armGeo, stoneMat);
             arm.position.y = -0.5;
             const pivot = new THREE.Group();
@@ -162,8 +156,7 @@ export default class EntityFactory {
 
         // F. Legs
         const createLeg = (lx, lz) => {
-            const legGeo = new THREE.BoxGeometry(0.6, 0.8, 0.6, 2, 2, 2);
-            this.distortGeometry(legGeo, 0.08);
+            const legGeo = new THREE.BoxGeometry(0.6, 0.8, 0.6);
             const leg = new THREE.Mesh(legGeo, stoneMat);
             leg.position.set(lx, -2.0, lz);
             g.add(leg);
@@ -177,7 +170,7 @@ export default class EntityFactory {
             radius: 2.5, 
             lArm, rArm, legs, 
             interactive: true,
-            dialog: "I am the ancient guardian of this island. You seek the hidden essence?"
+            dialog: "need. soul. soul. in. big. green. roof."
         };
         this.state.obstacles.push(g);
         return g;
@@ -188,15 +181,13 @@ export default class EntityFactory {
         const stoneMat = this.getMat(p.baseRock.clone().lerp(new THREE.Color(0x888888), 0.5));
         
         // Main peak - thicker by increasing base radius
-        const peakGeo = new THREE.ConeGeometry(8 * scale, 12 * scale, 6);
-        this.distortGeometry(peakGeo, 0.5 * scale);
+        const peakGeo = new THREE.ConeGeometry(10 * scale, 12 * scale, 6);
         const peak = new THREE.Mesh(peakGeo, stoneMat);
         peak.position.y = 5 * scale;
         g.add(peak);
 
         // Snow cap
-        const capGeo = new THREE.ConeGeometry(3 * scale, 4 * scale, 6);
-        this.distortGeometry(capGeo, 0.2 * scale);
+        const capGeo = new THREE.ConeGeometry(4 * scale, 4 * scale, 6);
         const cap = new THREE.Mesh(capGeo, this.getMat(0xffffff));
         cap.position.y = 9 * scale;
         g.add(cap);
@@ -204,17 +195,16 @@ export default class EntityFactory {
         // Secondary peaks - also thicker
         for (let i = 0; i < 4; i++) {
             const s = (0.5 + Math.random() * 0.5) * scale;
-            const subPeakGeo = new THREE.ConeGeometry(5 * s, 8 * s, 5);
-            this.distortGeometry(subPeakGeo, 0.3 * s);
+            const subPeakGeo = new THREE.ConeGeometry(6 * s, 8 * s, 5);
             const subPeak = new THREE.Mesh(subPeakGeo, stoneMat);
             const ang = (i / 4) * Math.PI * 2;
-            const dist = 5 * scale;
+            const dist = 6 * scale;
             subPeak.position.set(Math.cos(ang) * dist, 3 * s, Math.sin(ang) * dist);
             g.add(subPeak);
         }
 
         g.position.set(x, this.O_Y, z);
-        g.userData = { type: 'mountain', radius: 6 * scale };
+        g.userData = { type: 'mountain', radius: 8 * scale };
         this.state.obstacles.push(g);
         return g;
     }
@@ -224,16 +214,14 @@ export default class EntityFactory {
         const stoneMat = this.getMat(p.baseRock.clone().lerp(new THREE.Color(0x444444), 0.5));
         const goldMat = this.getMat(0xffd700, false); // Shiny gold
 
-        // Base rock
+        // Base rock - Simple Dodecahedron (One shape)
         const rockGeo = new THREE.DodecahedronGeometry(0.8 * scale, 0);
-        this.distortGeometry(rockGeo, 0.15 * scale);
         const rock = new THREE.Mesh(rockGeo, stoneMat);
         g.add(rock);
 
-        // Gold ores sticking out
+        // Gold ores sticking out - simple boxes
         for (let i = 0; i < 5; i++) {
             const oreGeo = new THREE.BoxGeometry(0.2 * scale, 0.2 * scale, 0.2 * scale);
-            this.distortGeometry(oreGeo, 0.05 * scale);
             const ore = new THREE.Mesh(oreGeo, goldMat);
             
             const phi = Math.random() * Math.PI * 2;
@@ -461,6 +449,42 @@ export default class EntityFactory {
         for (let i = 0; i < count; i++) {
             this.createParticle(pos.clone(), color, 0.6);
         }
+    }
+
+    createPickaxe(palette, x, z) {
+        const g = new THREE.Group();
+
+        const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x5d4037, flatShading: true });
+        const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, flatShading: true });
+
+        const handleGeo = new THREE.CylinderGeometry(0.0125, 0.015, 0.5, 6);
+        const handle = new THREE.Mesh(handleGeo, woodMaterial);
+        g.add(handle);
+
+        // Pick head (curved or just two cones/boxes)
+        const headGeo = new THREE.BoxGeometry(0.35, 0.04, 0.04);
+        const head = new THREE.Mesh(headGeo, metalMaterial);
+        head.position.y = 0.2;
+        // Curve it slightly by adding two angled pieces
+        const tipL = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.15, 4), metalMaterial);
+        tipL.rotation.z = Math.PI / 2 + 0.3;
+        tipL.position.x = -0.15;
+        tipL.position.y = 0.16;
+        
+        const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.15, 4), metalMaterial);
+        tipR.rotation.z = -Math.PI / 2 - 0.3;
+        tipR.position.x = 0.15;
+        tipR.position.y = 0.16;
+        
+        g.add(head, tipL, tipR);
+
+        g.position.set(x, this.O_Y + 0.1, z);
+        g.rotation.z = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        g.rotation.y = Math.random() * Math.PI * 2;
+        g.scale.set(0, 0, 0);
+        g.userData = { type: 'pickaxe', color: null };
+
+        return g;
     }
 
     createAxe(palette, x, z) {

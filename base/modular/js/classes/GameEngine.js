@@ -137,6 +137,7 @@ export default class GameEngine {
         });
         this.state.entities = []; this.state.obstacles = []; this.state.foods = [];
         this.state.heldAxe = null;
+        this.state.heldPickaxe = null;
         // Remove island groups
         this.islandGroups.forEach(ig => {
             ig.group.children.forEach(c => {
@@ -231,11 +232,18 @@ export default class GameEngine {
             name: "FLORA HAVEN"
         });
         // Vegetation on island 2
-        for (let i = 0; i < 6; i++) { const p = rndPolar(80, 0, 2.0, 11.0); const e = this.factory.createTree(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
-        for (let i = 0; i < 4; i++) { const p = rndPolar(80, 0, 1.5, 11.0); const e = this.factory.createBush(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 18; i++) { const p = rndPolar(80, 0, 2.0, 11.0); const e = this.factory.createTree(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 12; i++) { const p = rndPolar(80, 0, 1.5, 11.0); const e = this.factory.createBush(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 4; i++) { const p = rndPolar(80, 0, 1.5, 11.0); const e = this.factory.createRock(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 20; i++) { const p = rndPolar(80, 0, 0.5, 12.0); const e = this.factory.createGrass(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 6; i++) { const p = rndPolar(80, 0, 1.0, 11.0); const e = this.factory.createFlower(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        
+        // Pickaxe on island 2
+        const pickPos = rndPolar(80, 0, 2.0, 10.0);
+        const pickaxe = this.factory.createPickaxe(palette2, pickPos.x, pickPos.z);
+        this.state.entities.push(pickaxe);
+        this.world.add(pickaxe);
+
         // Creatures on island 2
         for (let i = 0; i < 3; i++) {
             const p = rndPolar(80, 0, 2.0, 9.0);
@@ -260,18 +268,23 @@ export default class GameEngine {
         });
 
         // Mountain in the center
+        // Scale 1.5 -> Base Radius = 10 * 1.5 = 15.0
         const mountain = this.factory.createMountain(palette3, 0, 110, 1.5);
         this.world.add(mountain);
         this.state.entities.push(mountain);
+        // Explicitly set collision data for PlayerController
+        mountain.userData.isMountain = true;
+        mountain.userData.mountRadius = 15.0; // Matches geometry radius
+        mountain.userData.mountHeight = 18.0; // 12 * 1.5 = 18 peak height
 
-        // Stone Golem near the mountain
-        const golem = this.factory.createStoneGolem(palette3, 0, 118);
+        // Stone Golem near the mountain (Moved further out: 110 + 17 = 127)
+        const golem = this.factory.createStoneGolem(palette3, 0, 127);
         this.world.add(golem);
         this.state.entities.push(golem);
 
         // Bigger rocks on island 3
         for (let i = 0; i < 8; i++) {
-            const p = rndPolar(0, 110, 8.0, 22.0);
+            const p = rndPolar(0, 110, 18.0, 26.0);
             const rock = this.factory.createRock(palette3, p.x, p.z);
             rock.scale.set(3, 3, 3); // BIG ROCKS
             this.state.entities.push(rock);
@@ -279,10 +292,22 @@ export default class GameEngine {
             this.state.obstacles.push(rock);
         }
 
-        // Other vegetation for island 3
-        for (let i = 0; i < 10; i++) { const p = rndPolar(0, 110, 10.0, 24.0); const e = this.factory.createTree(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
-        for (let i = 0; i < 40; i++) { const p = rndPolar(0, 110, 5.0, 26.0); const e = this.factory.createGrass(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
-        for (let i = 0; i < 12; i++) { const p = rndPolar(0, 110, 6.0, 22.0); const e = this.factory.createFlower(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        // Gold rocks on the edges of island 3 (Smaller: 20% of previous size)
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const r = island3.radius * 0.9;
+            const px = 0 + Math.cos(angle) * r;
+            const pz = 110 + Math.sin(angle) * r;
+            const scale = (2.5 + Math.random() * 1.5) * 0.2; // Reduced by 80%
+            const goldRock = this.factory.createGoldRock(palette3, px, pz, scale);
+            this.state.entities.push(goldRock);
+            this.world.add(goldRock);
+        }
+
+        // Other vegetation for island 3 (Outside mountain radius)
+        for (let i = 0; i < 10; i++) { const p = rndPolar(0, 110, 17.0, 26.0); const e = this.factory.createTree(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 40; i++) { const p = rndPolar(0, 110, 17.0, 27.0); const e = this.factory.createGrass(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 12; i++) { const p = rndPolar(0, 110, 17.0, 22.0); const e = this.factory.createFlower(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
 
         // --- Spawn player on island 1 ---
         this.state.player.pos.set(0, O_Y + 2, 0);
@@ -717,6 +742,79 @@ export default class GameEngine {
         }
     }
 
+    updateMining(dt) {
+        const state = this.state;
+        if (!state.isMining || !state.interactionTarget) return;
+
+        const rock = state.interactionTarget;
+        const dx = rock.position.x - state.player.pos.x;
+        const dz = rock.position.z - state.player.pos.z;
+        if (Math.sqrt(dx * dx + dz * dz) > 3.5) {
+            state.isMining = false;
+            state.mineProgress = 0;
+            return;
+        }
+
+        state.mineTimer += dt;
+
+        // Show chop indicator reused for mining (or make a new one, but reusing is simpler for now)
+        if (this.ui.chopIndicator) {
+            this.ui.chopIndicator.style.display = 'block';
+            if (this.ui.chopFill) {
+                this.ui.chopFill.style.width = ((state.mineProgress / 5) * 100) + '%';
+                this.ui.chopFill.style.background = '#aaaaaa'; // Grey for stone
+            }
+        }
+
+        if (state.mineTimer >= 0.4) {
+            state.mineTimer = 0;
+            state.mineProgress++;
+            this.audio.chop(); // Reuse chop sound or add pick sound
+
+            const shakeX = (Math.random() - 0.5) * 0.15;
+            const origX = rock.position.x;
+            rock.position.x += shakeX;
+            setTimeout(() => { if (rock.parent) rock.position.x = origX; }, 100);
+
+            this.factory.createChopParticles(rock.position.clone(), rock.userData.color || new THREE.Color(0x888888));
+
+            if (state.mineProgress >= 5) {
+                this.audio.treeFall(); // Reuse heavy thud
+                
+                // Spawn resources
+                const dropCount = 3;
+                const dropType = rock.userData.type === 'gold_rock' ? 'rock' : 'rock'; // We use 'rock' type for both but color distinguishes them
+                const dropColor = rock.userData.type === 'gold_rock' ? new THREE.Color(0xffd700) : (rock.userData.color || new THREE.Color(0x888888));
+                
+                for (let i = 0; i < dropCount; i++) {
+                    const drop = new THREE.Mesh(new THREE.DodecahedronGeometry(0.15), this.world.getMat(dropColor));
+                    drop.userData = { type: dropType, color: dropColor, autoPickup: true };
+                    drop.position.copy(rock.position);
+                    drop.position.y += 0.5;
+                    drop.position.x += (Math.random() - 0.5) * 0.8;
+                    drop.position.z += (Math.random() - 0.5) * 0.8;
+                    this.world.add(drop);
+                    state.entities.push(drop);
+                    
+                    // Add small velocity for "pop" effect
+                    // We don't have physics loop for these small items except simple pickup, so they just sit there.
+                }
+
+                // Remove rock
+                this.world.remove(rock);
+                const idx = state.entities.indexOf(rock);
+                if (idx > -1) state.entities.splice(idx, 1);
+                if (state.obstacles.includes(rock)) state.obstacles.splice(state.obstacles.indexOf(rock), 1);
+
+                state.isMining = false;
+                state.mineProgress = 0;
+                state.interactionTarget = null;
+                if (this.ui.chopIndicator) this.ui.chopIndicator.style.display = 'none';
+                if (this.ui.chopFill) this.ui.chopFill.style.background = '#ff8800'; // Reset color
+            }
+        }
+    }
+
     // --- Auto-pickup system ---
     updateAutoPickup() {
         const state = this.state;
@@ -840,6 +938,7 @@ export default class GameEngine {
                 this.playerController.updateCamera(camera);
                 this.input.updateInteraction();
                 this.updateChopping(dt);
+                this.updateMining(dt);
                 this.updateAutoPickup();
                 this.updateBoatProximity();
             }
