@@ -41,6 +41,14 @@ export default class InputHandler {
                     this.engine.boardBoat(this.engine._nearestBoat);
                 }
             }
+            // F to pick up/drop axe
+            if (k === 'f' && state.phase === 'playing' && !state.isOnBoat) {
+                if (state.heldAxe) {
+                    this.dropAxe();
+                } else {
+                    this.tryPickupAxe();
+                }
+            }
         });
         document.addEventListener('keyup', (e) => {
             const k = e.key.toLowerCase();
@@ -134,7 +142,13 @@ export default class InputHandler {
 
         const playerPos = state.player.pos;
 
-        // If holding an item, try to place it
+        // If holding the axe, drop it
+        if (state.heldAxe) {
+            this.dropAxe();
+            return;
+        }
+
+        // If holding an item in inventory, try to place it
         if (state.selectedSlot !== null && state.inventory[state.selectedSlot]) {
             this.handlePlace();
             return;
@@ -142,6 +156,65 @@ export default class InputHandler {
 
         // Otherwise, try to pick up nearby items
         this.handlePickup();
+    }
+
+    dropAxe() {
+        const state = this.engine.state;
+        const world = this.engine.world;
+        const sfx = this.engine.audio;
+
+        if (!state.heldAxe) return;
+
+        // Detach from player hand
+        this.engine.playerController.holdItem(null);
+
+        // Re-attach to world
+        const axe = state.heldAxe;
+        state.heldAxe = null;
+
+        // Position at player's feet
+        axe.position.copy(state.player.pos);
+        axe.position.y = this.engine.factory.O_Y + 0.1;
+
+        // Add random rotation
+        axe.rotation.y = Math.random() * Math.PI * 2;
+
+        world.add(axe);
+        state.entities.push(axe);
+
+        sfx.pickup();
+    }
+
+    tryPickupAxe() {
+        const state = this.engine.state;
+        const world = this.engine.world;
+        const sfx = this.engine.audio;
+
+        if (state.heldAxe) return;
+
+        // Find nearest axe
+        let nearestAxe = null;
+        let nearestDist = 4;
+
+        for (const e of state.entities) {
+            if (e.userData.type !== 'axe') continue;
+            const dist = state.player.pos.distanceTo(e.position);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearestAxe = e;
+            }
+        }
+
+        if (nearestAxe) {
+            sfx.pickup();
+            // Remove from world entities
+            const idx = state.entities.indexOf(nearestAxe);
+            if (idx > -1) state.entities.splice(idx, 1);
+            world.remove(nearestAxe);
+            // Attach to player's hand
+            state.heldAxe = nearestAxe;
+            this.engine.playerController.holdItem(nearestAxe);
+        }
     }
 
     handlePlace() {
@@ -236,6 +309,23 @@ export default class InputHandler {
 
             if (root.userData.type === 'boat') {
                 // Boats are boarded with E key, not picked up
+                return;
+            }
+
+            // Check for axe - pick up and hold in hand
+            if (root.userData.type === 'axe') {
+                // Check if player is close enough
+                const dist = state.player.pos.distanceTo(root.position);
+                if (dist < 4) {
+                    sfx.pickup();
+                    // Remove from world entities
+                    const idx = state.entities.indexOf(root);
+                    if (idx > -1) state.entities.splice(idx, 1);
+                    world.remove(root);
+                    // Attach to player's hand
+                    state.heldAxe = root;
+                    this.engine.playerController.holdItem(root);
+                }
                 return;
             }
 
@@ -408,6 +498,26 @@ export default class InputHandler {
         state.interactionTarget = nearest;
         if (nearest) {
             this.setHighlight(nearest, true);
+        }
+
+        // Show/hide axe hint
+        const axeHint = document.getElementById('axe-hint');
+        if (axeHint) {
+            if (!state.heldAxe) {
+                let nearAxe = false;
+                for (const e of state.entities) {
+                    if (e.userData.type !== 'axe') continue;
+                    const dist = state.player.pos.distanceTo(e.position);
+                    if (dist < 4) { nearAxe = true; break; }
+                }
+                axeHint.style.display = nearAxe ? 'block' : 'none';
+                if (nearAxe) {
+                    axeHint.textContent = 'Press F to pick up Axe';
+                }
+            } else {
+                axeHint.style.display = 'block';
+                axeHint.textContent = 'Press F to drop Axe';
+            }
         }
     }
 

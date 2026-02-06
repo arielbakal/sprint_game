@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Isolated Controller Test</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #111; font-family: monospace; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #instructions {
+            position: absolute; top: 20px; left: 20px;
+            color: white; background: rgba(0,0,0,0.5); padding: 15px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="instructions">
+    <h3>CONTROLLER TEST</h3>
+    CLICK to Capture Mouse<br>
+    WASD to Move<br>
+    SPACE to Jump
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    // --- CONSTANTS & CONFIG ---
+    const CONFIG = {
+        walkSpeed: 0.15,
+        runSpeed: 0.3, // unused currently
+        jumpForce: 0.3,
+        gravity: 0.015,
+        turnSpeed: 0.15, // Rotation smoothing (0.0 - 1.0)
+        camDist: 6.0,
+        camHeight: 3.0,
+        camSmooth: 0.1, // Camera lag (lower is smoother/laggier)
+        mouseSens: 0.002
+    };
+
+    // --- SETUP THREE.JS ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xa0a0a0);
+    scene.fog = new THREE.Fog(0xa0a0a0, 10, 50);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // Lights
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff);
+    dirLight.position.set(-3, 10, 10);
+    dirLight.castShadow = true;
+    dirLight.shadow.camera.top = 10;
+    dirLight.shadow.camera.bottom = -10;
+    dirLight.shadow.camera.left = -10;
+    dirLight.shadow.camera.right = 10;
+    scene.add(dirLight);
+
+    // Ground
+    const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100),
+        new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const grid = new THREE.GridHelper(100, 40, 0x000000, 0x000000);
+    grid.material.opacity = 0.2;
+    grid.material.transparent = true;
+    scene.add(grid);
+
+    // --- PLAYER MODEL CONSTRUCTION ---
+    const playerGroup = new THREE.Group();
+    scene.add(playerGroup);
+
+    // 1. The Pivot (Rotates to face direction)
+    const modelPivot = new THREE.Group();
+    playerGroup.add(modelPivot);
+
+    // Alien Materials
+    const matBody = new THREE.MeshPhongMaterial({ color: 0x39FF14 }); // Green
+    const matLimb = new THREE.MeshPhongMaterial({ color: 0xFF00FF }); // Magenta
+    const matEye = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const matPupil = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+    // Torso (Shifted up so origin is at feet)
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.3), matBody);
+    torso.position.y = 0.7; 
+    torso.castShadow = true;
+    modelPivot.add(torso);
+
+    // Head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.4), matLimb);
+    head.position.y = 1.2;
+    head.castShadow = true;
+    modelPivot.add(head);
+
+    // Eyes (Face Z+)
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), matEye);
+    eyeL.position.set(0.12, 1.2, 0.2);
+    const eyeR = eyeL.clone();
+    eyeR.position.set(-0.12, 1.2, 0.2);
+    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.06), matPupil);
+    pupil.position.z = 0.01;
+    eyeL.add(pupil);
+    eyeR.add(pupil.clone());
+    modelPivot.add(eyeL, eyeR);
+
+    // Legs (Simple Pivot Points)
+    const legGeo = new THREE.BoxGeometry(0.15, 0.4, 0.15);
+    // Move geometry so pivot is at the top
+    legGeo.translate(0, -0.2, 0); 
+
+    const legL = new THREE.Mesh(legGeo, matLimb);
+    legL.position.set(0.15, 0.4, 0);
+    legL.castShadow = true;
+    modelPivot.add(legL);
+
+    const legR = new THREE.Mesh(legGeo, matLimb);
+    legR.position.set(-0.15, 0.4, 0);
+    legR.castShadow = true;
+    modelPivot.add(legR);
+
+    // Arms
+    const armGeo = new THREE.BoxGeometry(0.12, 0.4, 0.12);
+    armGeo.translate(0, -0.2, 0);
+    const armL = new THREE.Mesh(armGeo, matLimb);
+    armL.position.set(0.35, 0.9, 0);
+    modelPivot.add(armL);
+    const armR = new THREE.Mesh(armGeo, matLimb);
+    armR.position.set(-0.35, 0.9, 0);
+    modelPivot.add(armR);
+
+
+    // --- STATE MANAGEMENT ---
+    const STATE = {
+        position: new THREE.Vector3(0, 0, 0),
+        velocity: new THREE.Vector3(0, 0, 0),
+        onGround: false,
+        cameraAngle: { x: 0, y: 0.3 }, // x = horizontal (theta), y = vertical (phi)
+        input: { w: false, a: false, s: false, d: false, space: false },
+        targetRotation: 0,
+        time: 0
+    };
+
+    // --- INPUT HANDLING ---
+    document.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'w') STATE.input.w = true;
+        if (key === 'a') STATE.input.a = true;
+        if (key === 's') STATE.input.s = true;
+        if (key === 'd') STATE.input.d = true;
+        if (key === ' ') STATE.input.space = true;
+    });
+
+    document.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'w') STATE.input.w = false;
+        if (key === 'a') STATE.input.a = false;
+        if (key === 's') STATE.input.s = false;
+        if (key === 'd') STATE.input.d = false;
+        if (key === ' ') STATE.input.space = false;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (document.pointerLockElement === document.body) {
+            STATE.cameraAngle.x -= e.movementX * CONFIG.mouseSens;
+            STATE.cameraAngle.y -= e.movementY * CONFIG.mouseSens;
+            
+            // Clamp Vertical
+            STATE.cameraAngle.y = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, STATE.cameraAngle.y));
+        }
+    });
+
+    document.addEventListener('click', () => {
+        document.body.requestPointerLock();
+    });
+
+    // --- PHYSICS & ANIMATION LOOP ---
+    function update(dt) {
+        STATE.time += dt;
+
+        // 1. Calculate Camera Direction vectors
+        // We only care about horizontal direction for movement
+        const camDir = new THREE.Vector3();
+        camera.getWorldDirection(camDir);
+        camDir.y = 0;
+        camDir.normalize();
+
+        const camRight = new THREE.Vector3();
+        camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize(); // Actually this is Left in ThreeJS usually, let's fix logic below
+
+        // 2. Determine Move Direction based on Input
+        const moveDir = new THREE.Vector3(0, 0, 0);
+        if (STATE.input.w) moveDir.add(camDir);
+        if (STATE.input.s) moveDir.sub(camDir);
+        if (STATE.input.a) moveDir.sub(camRight); // Or add depending on cross product order
+        if (STATE.input.d) moveDir.add(camRight);
+
+        const isMoving = moveDir.lengthSq() > 0;
+
+        // 3. Physics (Velocity)
+        if (isMoving) {
+            moveDir.normalize();
+            // Accelerate
+            STATE.velocity.x = moveDir.x * CONFIG.walkSpeed;
+            STATE.velocity.z = moveDir.z * CONFIG.walkSpeed;
+            
+            // Calculate Target Rotation (Facing direction)
+            STATE.targetRotation = Math.atan2(moveDir.x, moveDir.z);
+        } else {
+            // Decelerate / Friction
+            STATE.velocity.x *= 0.8;
+            STATE.velocity.z *= 0.8;
+        }
+
+        // Gravity
+        STATE.velocity.y -= CONFIG.gravity;
+
+        // Apply Velocity
+        STATE.position.add(STATE.velocity);
+
+        // Ground Collision (Simple Plane at Y=0)
+        if (STATE.position.y < 0) {
+            STATE.position.y = 0;
+            STATE.velocity.y = 0;
+            STATE.onGround = true;
+        } else {
+            STATE.onGround = false;
+        }
+
+        // Jump
+        if (STATE.onGround && STATE.input.space) {
+            STATE.velocity.y = CONFIG.jumpForce;
+            STATE.onGround = false;
+        }
+
+        // 4. Update Player Mesh
+        playerGroup.position.copy(STATE.position);
+
+        // Smooth Rotation Logic
+        // We interpolate the current rotation towards the target rotation
+        if (isMoving) {
+            const currentQ = modelPivot.quaternion;
+            const targetQ = new THREE.Quaternion();
+            targetQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), STATE.targetRotation);
+            modelPivot.quaternion.slerp(targetQ, CONFIG.turnSpeed);
+        }
+
+        // 5. Procedural Animation (Walking)
+        if (isMoving && STATE.onGround) {
+            const walkCycle = STATE.time * 10;
+            // Legs
+            legL.rotation.x = Math.sin(walkCycle) * 0.8;
+            legR.rotation.x = Math.sin(walkCycle + Math.PI) * 0.8;
+            // Arms (Opposite to legs)
+            armL.rotation.x = Math.sin(walkCycle + Math.PI) * 0.5;
+            armR.rotation.x = Math.sin(walkCycle) * 0.5;
+            // Bobbing
+            modelPivot.position.y = Math.abs(Math.sin(walkCycle * 2)) * 0.05;
+        } else {
+            // Idle Pose
+            const lerpSpeed = 0.1;
+            legL.rotation.x = THREE.MathUtils.lerp(legL.rotation.x, 0, lerpSpeed);
+            legR.rotation.x = THREE.MathUtils.lerp(legR.rotation.x, 0, lerpSpeed);
+            armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, 0, lerpSpeed);
+            armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, 0, lerpSpeed);
+            modelPivot.position.y = THREE.MathUtils.lerp(modelPivot.position.y, 0, lerpSpeed);
+        }
+
+        // 6. Camera Orbit Logic
+        // Calculate desired camera position based on angles
+        const camX = STATE.position.x + CONFIG.camDist * Math.sin(STATE.cameraAngle.x) * Math.cos(STATE.cameraAngle.y);
+        const camZ = STATE.position.z + CONFIG.camDist * Math.cos(STATE.cameraAngle.x) * Math.cos(STATE.cameraAngle.y);
+        const camY = STATE.position.y + CONFIG.camDist * Math.sin(STATE.cameraAngle.y) + 1.0; // +1.0 Look offset
+
+        const desiredPos = new THREE.Vector3(camX, camY, camZ);
+        
+        // Smoothly interpolate current camera position to desired position
+        camera.position.lerp(desiredPos, CONFIG.camSmooth);
+        
+        // Look at player head
+        camera.lookAt(STATE.position.x, STATE.position.y + 1.5, STATE.position.z);
+    }
+
+    // --- RENDER LOOP ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = clock.getDelta();
+        update(dt);
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Resize Handle
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+</script>
+</body>
+</html>

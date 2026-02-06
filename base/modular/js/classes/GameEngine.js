@@ -136,6 +136,7 @@ export default class GameEngine {
             this.state.debris.push(f);
         });
         this.state.entities = []; this.state.obstacles = []; this.state.foods = [];
+        this.state.heldAxe = null;
         // Remove island groups
         this.islandGroups.forEach(ig => {
             ig.group.children.forEach(c => {
@@ -153,6 +154,7 @@ export default class GameEngine {
         this.logs = [];
         this.state.isOnBoat = false;
         this.state.activeBoat = null;
+        this.state.heldAxe = null;
         this.playerController.remove();
         this.audio.fadeOut();
         setTimeout(() => this.initGame(null), 800);
@@ -208,6 +210,12 @@ export default class GameEngine {
             this.state.entities.push(c);
             this.world.add(c);
         }
+
+        // Axe placed randomly on island 1
+        const axePos = rndPolar(0, 0, 2.0, 9.0);
+        const axe = this.factory.createAxe(this.state.palette, axePos.x, axePos.z);
+        this.state.entities.push(axe);
+        this.world.add(axe);
 
         // --- Island 2: Second island (different palette, with some life) ---
         const palette2 = this.factory.generatePalette(null);
