@@ -348,6 +348,15 @@ export default class GameEngine {
             this.world.add(c);
         }
 
+        // Global clouds scattered across the entire map
+        for (let i = 0; i < 40; i++) {
+            const cx = (Math.random() - 0.5) * 300;
+            const cz = (Math.random() - 0.5) * 300;
+            const cloud = this.factory.createCloud(cx, 15 + Math.random() * 15, cz);
+            cloud.scale.set(1, 1, 1);
+            this.world.add(cloud);
+        }
+
         // --- Spawn player on island 1 ---
         this.state.player.pos.set(0, O_Y + 2, 0);
         this.state.player.vel.set(0, 0, 0);

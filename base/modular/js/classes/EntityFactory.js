@@ -165,6 +165,33 @@ export default class EntityFactory {
         return g;
     }
 
+    createCloud(x, y, z) {
+        const g = new THREE.Group();
+        const cloudColor = new THREE.Color(0xffffff);
+        const cloudMat = new THREE.MeshLambertMaterial({ color: cloudColor, transparent: true, opacity: 0.8 });
+
+        const sizes = [
+            { w: 8 + Math.random() * 6, h: 1 + Math.random() * 1, d: 4 + Math.random() * 3 },
+            { w: 6 + Math.random() * 4, h: 0.8 + Math.random() * 0.8, d: 3 + Math.random() * 2 },
+            { w: 5 + Math.random() * 3, h: 0.6 + Math.random() * 0.6, d: 2.5 + Math.random() * 2 }
+        ];
+
+        for (let i = 0; i < 3; i++) {
+            const geo = new THREE.BoxGeometry(sizes[i].w, sizes[i].h, sizes[i].d);
+            const mesh = new THREE.Mesh(geo, cloudMat);
+            mesh.position.set(
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 0.5,
+                (Math.random() - 0.5) * 1.5
+            );
+            g.add(mesh);
+        }
+
+        g.position.set(x, y, z);
+        g.userData = { type: 'cloud' };
+        return g;
+    }
+
     createCreature(p, x, z, style = null) {
         const g = new THREE.Group();
         const dna = style || {
