@@ -129,8 +129,8 @@ export default class InputHandler {
             if (!document.pointerLockElement) return;
             if (state.isOnBoat) return; // No interaction while sailing
 
-            // Start chopping if interactionTarget is a choppable tree
-            if (state.interactionTarget && state.interactionTarget.userData.choppable) {
+            // Start chopping if interactionTarget is a choppable tree AND player has axe
+            if (state.interactionTarget && state.interactionTarget.userData.choppable && state.heldAxe) {
                 state.isChopping = true;
                 state.chopTimer = 0;
                 return;
@@ -595,7 +595,7 @@ export default class InputHandler {
 
             // Short tap = interact
             if (dt < 250) {
-                if (state.interactionTarget && state.interactionTarget.userData.choppable) {
+                if (state.interactionTarget && state.interactionTarget.userData.choppable && state.heldAxe) {
                     state.isChopping = true;
                     state.chopTimer = 0;
                     setTimeout(() => { state.isChopping = false; }, 500);
