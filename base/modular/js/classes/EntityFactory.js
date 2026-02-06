@@ -1,5 +1,5 @@
 // =====================================================
-// POCKET TERRARIUM - ENTITY FACTORY CLASS
+// ENTITY FACTORY CLASS
 // =====================================================
 
 export default class EntityFactory {
@@ -98,7 +98,7 @@ export default class EntityFactory {
         g.position.set(x, this.O_Y, z);
         g.rotation.y = Math.random() * Math.PI * 2;
         g.scale.set(0, 0, 0);
-        g.userData = { type: 'tree', radius: 0.6, style: dna, color: dna.color, productionTimer: Math.random() * 20 };
+        g.userData = { type: 'tree', radius: 0.6, style: dna, color: dna.color, productionTimer: Math.random() * 20, health: 5, choppable: true };
         this.state.obstacles.push(g);
         return g;
     }
@@ -268,25 +268,63 @@ export default class EntityFactory {
         this.state.particles.push(p);
     }
 
-    createIsland(palette) {
+    createLog(palette, x, z) {
         const g = new THREE.Group();
-        const base = new THREE.Mesh(this.generateTerrain(7, 30, -0.3, 0.3), this.getMat(palette.baseRock));
+        const log = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.12, 0.12, 0.8, 6),
+            this.getMat(palette.trunk)
+        );
+        log.rotation.z = Math.PI / 2;
+        log.position.y = 0.12;
+        g.add(log);
+        g.position.set(x, this.O_Y, z);
+        g.scale.set(0, 0, 0);
+        g.userData = { type: 'log', color: palette.trunk, autoPickup: true };
+        return g;
+    }
+
+    createChopParticles(pos, color, count = 6) {
+        for (let i = 0; i < count; i++) {
+            this.createParticle(pos.clone(), color, 0.6);
+        }
+    }
+
+    // Create island at a specific world position with given radius
+    createIslandAt(palette, centerX, centerZ, radius, hasWater = false) {
+        const g = new THREE.Group();
+        const segments = Math.max(20, Math.floor(radius * 4));
+        const baseR = radius;
+        const soilR = radius * 0.93;
+        const grassR = radius * 0.9;
+
+        const base = new THREE.Mesh(this.generateTerrain(baseR, segments, -0.3, 0.3), this.getMat(palette.baseRock));
         base.rotation.x = -Math.PI / 2; base.position.y = -2;
-        const soil = new THREE.Mesh(this.generateTerrain(6.5, 30, -0.2, 0.2), this.getMat(palette.soil));
+        const soil = new THREE.Mesh(this.generateTerrain(soilR, segments, -0.2, 0.2), this.getMat(palette.soil));
         soil.rotation.x = -Math.PI / 2; soil.position.y = -1.5;
-        const grass = new THREE.Mesh(this.generateTerrain(6.3, 30, -0.1, 0.1), this.getMat(palette.groundTop));
+        const grass = new THREE.Mesh(this.generateTerrain(grassR, segments, -0.1, 0.1), this.getMat(palette.groundTop));
         grass.rotation.x = -Math.PI / 2; grass.position.y = this.O_Y;
         grass.userData = { type: 'ground' };
-        const waterGeo = new THREE.CircleGeometry(60, 40);
-        const wp = waterGeo.attributes.position;
-        for (let i = 1; i < wp.count; i++) wp.setZ(i, wp.getZ(i) + (Math.random() - 0.5) * 0.8);
-        waterGeo.computeVertexNormals();
-        const waterColor = palette.background.clone().lerp(new THREE.Color(0x0066aa), 0.7);
-        const water = new THREE.Mesh(waterGeo, new THREE.MeshPhongMaterial({ color: waterColor, transparent: true, opacity: 0.6, shininess: 90, flatShading: true }));
-        water.rotation.x = -Math.PI / 2;
-        water.position.y = -2.0;
-        water.userData = { type: 'water' };
-        g.add(base, soil, grass, water);
-        return { group: g, groundPlane: grass };
+        g.add(base, soil, grass);
+
+        if (hasWater) {
+            const waterGeo = new THREE.CircleGeometry(200, 50);
+            const wp = waterGeo.attributes.position;
+            for (let i = 1; i < wp.count; i++) wp.setZ(i, wp.getZ(i) + (Math.random() - 0.5) * 0.8);
+            waterGeo.computeVertexNormals();
+            const waterColor = palette.background.clone().lerp(new THREE.Color(0x0066aa), 0.7);
+            const water = new THREE.Mesh(waterGeo, new THREE.MeshPhongMaterial({ color: waterColor, transparent: true, opacity: 0.6, shininess: 90, flatShading: true }));
+            water.rotation.x = -Math.PI / 2;
+            water.position.y = -2.0;
+            water.userData = { type: 'water' };
+            g.add(water);
+        }
+
+        g.position.set(centerX, 0, centerZ);
+        return { group: g, groundPlane: grass, center: new THREE.Vector3(centerX, 0, centerZ), radius: grassR };
+    }
+
+    // Legacy wrapper
+    createIsland(palette) {
+        return this.createIslandAt(palette, 0, 0, 7, true);
     }
 }
