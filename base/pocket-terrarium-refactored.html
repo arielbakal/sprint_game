@@ -1,0 +1,2002 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Pocket Terrarium: Ecosystem</title>
+    <script src="https://cdn.jsdelivr.net/npm/beepbox@4.2.0/global/beepbox_synth.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #050510;
+            font-family: 'Press Start 2P', 'Courier New', monospace;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        #custom-cursor {
+            position: fixed;
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            pointer-events: none;
+            z-index: 1000;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 2px #000, 0 0 10px 2px rgba(255, 255, 255, 0.5);
+            mix-blend-mode: difference;
+            display: none;
+            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #custom-cursor.active {
+            transform: translate(-50%, -50%) scale(1.5);
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            #custom-cursor {
+                display: block;
+            }
+        }
+
+        #settings-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            pointer-events: auto;
+            width: 44px;
+            height: 44px;
+            background: #1a1a24;
+            border: 3px solid #fff;
+            box-shadow: 4px 4px 0px #000;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        @media (max-width: 600px) {
+            #inventory-container {
+                width: 75%;
+                left: 45%;
+            }
+
+            #settings-btn {
+                right: 10px;
+                top: 20px;
+                width: 40px;
+                height: 40px;
+            }
+        }
+
+        #settings-btn:hover {
+            transform: scale(1.1);
+        }
+
+        #settings-btn:active {
+            transform: scale(0.95);
+        }
+
+        #settings-popup {
+            position: absolute;
+            top: 75px;
+            right: 20px;
+            pointer-events: auto;
+            background: #1a1a24;
+            padding: 15px;
+            border: 3px solid #fff;
+            box-shadow: 4px 4px 0px #000;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        #settings-popup.open {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #settings-popup label {
+            color: #fff;
+            font-size: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #vol-slider-container {
+            width: 100px;
+            display: flex;
+            align-items: center;
+        }
+
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #fff;
+        }
+
+        #essence-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            transition: opacity 0.8s;
+        }
+
+        #essence-screen.hidden {
+            opacity: 0;
+        }
+
+        #inventory-container {
+            pointer-events: auto;
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 500px;
+            height: 70px;
+            background: #1a1a24;
+            border: 4px solid #fff;
+            box-shadow: 6px 6px 0px #000, 0 0 30px rgba(255, 255, 255, 0.2);
+            display: none;
+            align-items: center;
+            overflow-x: auto;
+            padding: 0 10px;
+            scrollbar-width: none;
+            animation: slideDown 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 90;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateX(-50%) translateY(-100px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        #inventory-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        #inventory-grid {
+            display: flex;
+            gap: 12px;
+            margin: 0 auto;
+        }
+
+        .slot {
+            width: 48px;
+            height: 48px;
+            background: #000;
+            border: 3px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            position: relative;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .slot:hover {
+            transform: scale(1.1);
+            border-color: #888;
+        }
+
+        .slot.active {
+            border-color: #fff;
+            background: #2a2a35;
+            box-shadow: inset 0 0 0 2px #fff, 0 0 20px rgba(255, 255, 255, 0.5);
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1.1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .icon-creature,
+        .icon-rock,
+        .icon-grass,
+        .icon-flower,
+        .icon-egg {
+            border: 2px solid rgba(0, 0, 0, 0.5);
+        }
+
+        .icon-creature {
+            width: 22px;
+            height: 22px;
+            box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .icon-rock {
+            width: 16px;
+            height: 16px;
+            transform: rotate(45deg);
+        }
+
+        .icon-food {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+        }
+
+        .icon-bush {
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 18px solid;
+            filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.3));
+        }
+
+        .icon-tree {
+            width: 10px;
+            height: 20px;
+            background: currentColor;
+            border-top: 5px solid #fff;
+            box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .icon-grass {
+            width: 8px;
+            height: 18px;
+            background: currentColor;
+            box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .icon-flower {
+            width: 12px;
+            height: 12px;
+            background: currentColor;
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px #fff, 2px 2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .icon-egg {
+            width: 14px;
+            height: 18px;
+            background: currentColor;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        #reset-btn {
+            pointer-events: auto;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 10px 20px;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 4px 4px 0px #000, 0 0 10px rgba(0, 0, 0, 0.5);
+            transition: all 0.2s;
+            animation: slideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100;
+        }
+
+        #reset-btn .skull {
+            font-size: 1.1rem;
+        }
+
+        #reset-btn .text {
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateX(-50%) translateY(100px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        #reset-btn:hover {
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 8px 8px 0px #000, 0 0 40px rgba(255, 51, 51, 0.8);
+        }
+
+        #reset-btn:active {
+            transform: translateX(-50%) translateY(4px) scale(0.95);
+            box-shadow: 2px 2px 0px #000, 0 0 20px rgba(255, 51, 51, 0.5);
+        }
+
+        #white-flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 999;
+        }
+
+        #touch-reticle {
+            position: fixed;
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            pointer-events: none;
+            z-index: 2000;
+            transition: transform 0.1s;
+        }
+
+        #touch-reticle.active {
+            transform: translate(-50%, -50%) scale(1);
+            animation: reticlePulse 1s infinite;
+        }
+
+        @keyframes reticlePulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+            }
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: #fff;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1000;
+            box-shadow: 0 0 0 2px #000;
+            display: none;
+        }
+
+        #fps-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            text-align: center;
+            font-size: 12px;
+            text-shadow: 2px 2px 0 #000;
+            pointer-events: none;
+            z-index: 900;
+            display: none;
+            line-height: 1.5;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border: 2px solid #fff;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #fff;
+            font-size: 0.6rem;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .mode-btn {
+            background: #2a2a35;
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 5px 10px;
+            font-family: inherit;
+            cursor: pointer;
+            font-size: 0.5rem;
+            text-transform: uppercase;
+        }
+
+        .mode-btn:hover {
+            background: #444;
+        }
+
+        .mode-btn.active {
+            background: #44f;
+            border-color: #88f;
+        }
+
+        #dialog-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a24;
+            border: 4px solid #fff;
+            padding: 20px;
+            color: #fff;
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 8px 8px 0 #000;
+            max-width: 80%;
+            text-align: center;
+            font-family: 'Press Start 2P', monospace;
+            line-height: 1.5;
+        }
+
+        #dialog-box button {
+            background: transparent;
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 10px;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        #dialog-box button:hover {
+            background: #fff;
+            color: #000;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="custom-cursor"></div>
+    <div id="touch-reticle"></div>
+    <div id="crosshair"></div>
+    <div id="fps-msg">CLICK TO CAPTURE MOUSE<br><br>WASD to Move<br>SPACE to Jump<br>CLICK to Interact<br>1-8 for
+        Inventory<br>ESC for Settings<br>M to Unlock Mouse</div>
+    <div id="white-flash"></div>
+
+    <div id="ui-layer">
+        <button id="settings-btn">⚙️</button>
+        <div id="settings-popup">
+            <label>
+                <span id="vol-icon">🔊</span>
+                <div id="vol-slider-container">
+                    <input type="range" id="vol-slider" min="0" max="100" value="50">
+                </div>
+            </label>
+            <div class="setting-row">
+                <span>MODE:</span>
+                <div>
+                    <button id="mode-creator" class="mode-btn active">GOD</button>
+                    <button id="mode-fps" class="mode-btn">FPS</button>
+                </div>
+            </div>
+            <div class="setting-row">
+                <span>SENS:</span>
+                <input type="range" id="sens-slider" min="1" max="100" value="20" style="width:60px;">
+            </div>
+            <button id="grow-btn"
+                style="width:100%; margin-top:10px; background:#2a2a35; color:#fff; border:2px solid #fff; padding:5px; font-family:inherit; font-size:0.6rem; cursor:pointer;">
+                GROW TERRAIN
+            </button>
+        </div>
+        <div id="dialog-box">
+            <p id="dialog-text">Greetings, traveler! I am the Chief.</p>
+            <button onclick="document.getElementById('dialog-box').style.display='none';">CLOSE</button>
+        </div>
+        <div id="essence-screen"></div>
+        <div id="inventory-container">
+            <div id="inventory-grid"></div>
+        </div>
+        <button id="reset-btn">
+            <span class="skull">☠</span>
+            <span class="text">NEW WORLD</span>
+            <span class="skull">☠</span>
+        </button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // =====================================================
+        // POCKET TERRARIUM - OOP REFACTORED ARCHITECTURE
+        // =====================================================
+
+        // ===== AUDIO MANAGER CLASS =====
+        class AudioManager {
+            constructor() {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.synth = null;
+                this.isMuted = false;
+                this.previousSliderVal = 50;
+                this.MASTER_GAIN_CAP = 0.2;
+                this.songHash = "#9n31s0k0l00e0ct2ma7g0fj07r1i0o432T7v1u07f30p12k12b2q0z10v631d07HW0oc054R081000h0IbE1b9T0v2u00f11a8q1w10u84cd09w4h8E1bdT1v3u01f20e0269q00d0aAbF7B5Q0205P5aa0E177T3v2u03f10beq30a21d04SJzqiiih9999iijsE186b0ic1848ic0014j000h8g014h0g4100004h4x410g400p21-IR_0qGSrzYsddvYPnWqtLmrb_j4ttAv7snTdQ_MwqjHZdJ2OY2CzMh70At97khQAth7ipuwhQAt97khRDdPLWOewOMkTB_EL0jzQOBBcwkTBdhjkblheDFaqiCwQg0";
+            }
+
+            resume() { if (this.ctx.state === 'suspended') this.ctx.resume(); }
+
+            chirp(f1, f2, dur, vol = 0.1) {
+                this.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.frequency.setValueAtTime(f1, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(f2, this.ctx.currentTime + dur);
+                gain.gain.setValueAtTime(0, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + (dur * 0.1));
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                osc.start();
+                osc.stop(this.ctx.currentTime + dur);
+            }
+
+            select() { this.chirp(600, 900, 0.15, 0.05); }
+            pickup() { this.chirp(300, 500, 0.2, 0.1); }
+            place() { this.chirp(500, 300, 0.2, 0.1); }
+            pop() { this.chirp(800, 1000, 0.1, 0.05); }
+            eat() { this.chirp(400, 500, 0.08, 0.05); setTimeout(() => this.chirp(400, 500, 0.08, 0.05), 120); }
+            hungry() { this.chirp(500, 400, 0.4, 0.08); setTimeout(() => this.chirp(420, 350, 0.4, 0.06), 200); }
+            sing() { this.chirp(600, 800, 0.1, 0.05); setTimeout(() => this.chirp(800, 1000, 0.1, 0.05), 150); setTimeout(() => this.chirp(1000, 700, 0.2, 0.05), 300); }
+            layEgg() { this.chirp(400, 200, 0.15, 0.1); }
+            die() { this.chirp(300, 100, 0.6, 0.1); }
+
+            pet() {
+                this.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const lfo = this.ctx.createOscillator();
+                lfo.frequency.value = 25;
+                const lfoGain = this.ctx.createGain();
+                lfoGain.gain.value = 30;
+                lfo.connect(lfoGain);
+                lfoGain.connect(osc.frequency);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'triangle';
+                osc.frequency.value = 200;
+                gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+                osc.start(); lfo.start();
+                osc.stop(this.ctx.currentTime + 0.5);
+                lfo.stop(this.ctx.currentTime + 0.5);
+            }
+
+            explode() {
+                this.resume();
+                const noise = this.ctx.createBufferSource();
+                const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.5, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+                noise.buffer = buffer;
+                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(300, this.ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.5);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+                noise.start();
+                noise.stop(this.ctx.currentTime + 0.5);
+            }
+
+            startMusic(worldDNA, volSlider, volIcon, settingsBtn, settingsPopup, sfx) {
+                const targetVol = (parseFloat(volSlider.value) / 100) * this.MASTER_GAIN_CAP;
+                if (!this.synth) {
+                    if (typeof beepbox === 'undefined') return;
+                    const { Synth } = beepbox;
+                    this.synth = new Synth(this.songHash);
+                    volSlider.addEventListener("input", (e) => {
+                        const val = parseFloat(e.target.value);
+                        if (this.synth) this.synth.volume = (val / 100) * this.MASTER_GAIN_CAP;
+                        volIcon.innerText = val <= 0 ? "🔇" : "🔊";
+                        this.isMuted = val <= 0;
+                    });
+                    volIcon.addEventListener("click", () => {
+                        if (!this.synth) return;
+                        if (this.isMuted) {
+                            volSlider.value = this.previousSliderVal || 50;
+                            this.synth.volume = (parseFloat(volSlider.value) / 100) * this.MASTER_GAIN_CAP;
+                            volIcon.innerText = "🔊";
+                            this.isMuted = false;
+                        } else {
+                            this.previousSliderVal = parseFloat(volSlider.value) || 50;
+                            volSlider.value = 0;
+                            this.synth.volume = 0;
+                            volIcon.innerText = "🔇";
+                            this.isMuted = true;
+                        }
+                    });
+                    settingsBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        settingsPopup.classList.toggle('open');
+                        sfx.select();
+                    });
+                    window.addEventListener('click', (e) => {
+                        if (settingsPopup.classList.contains('open') && !settingsPopup.contains(e.target) && e.target !== settingsBtn) {
+                            settingsPopup.classList.remove('open');
+                        }
+                    });
+                    this.synth.volume = targetVol;
+                    this.synth.play();
+                } else {
+                    if (this.synth.audioContext && this.synth.audioContext.state === 'suspended') this.synth.audioContext.resume();
+                    this.synth.volume = targetVol;
+                    this.synth.play();
+                }
+                this.randomize(worldDNA);
+            }
+
+            randomize(dna) {
+                if (!this.synth || !this.synth.song) return;
+                const channel = this.synth.song.channels[1];
+                const instrument = channel.instruments[0];
+                instrument.type = 0;
+                instrument.chipWave = Math.floor(Math.random() * 9);
+                instrument.unison = Math.floor(Math.random() * 4);
+                instrument.transition = Math.floor(Math.random() * 4);
+                if (instrument.envelopes.length > 0) instrument.envelopes[0].punch = Math.floor(Math.random() * 4) * 20;
+                instrument.volume = 0;
+                this.synth.setSong(this.synth.song);
+            }
+
+            fadeOut() { if (this.synth) this.synth.volume = 0; }
+        }
+
+        // ===== GAME STATE CLASS =====
+        class GameState {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.gameMode = 'creator';
+                this.sensitivity = 0.04;
+                this.fov = 60;
+                this.phase = 'essence';
+                this.palette = null;
+                this.worldDNA = null;
+                this.inventory = new Array(8).fill(null);
+                this.selectedSlot = null;
+                this.entities = [];
+                this.foods = [];
+                this.particles = [];
+                this.debris = [];
+                this.ambientParticles = [];
+                this.obstacles = [];
+                this.interaction = { mode: 'idle', heldEntity: null, pressTime: 0, startPos: new THREE.Vector2(), isZooming: false };
+                this.mouseX = 0;
+                this.mouseY = 0;
+                this.camAngle = 0;
+                this.camRadius = 13;
+                this.zoomStart = 0;
+                this.hoveredSphere = null;
+                this.selectedEssence = null;
+                this.selectionProgress = 0;
+                this.musicStarted = false;
+                this.player = {
+                    pos: new THREE.Vector3(0, 0, 0),
+                    vel: new THREE.Vector3(0, 0, 0),
+                    speed: 0.08,
+                    yaw: 0, pitch: 0,
+                    targetYaw: 0, targetPitch: 0,
+                    canJump: false
+                };
+                this.inputs = { w: false, a: false, s: false, d: false, space: false };
+                this.lastInteractTime = 0;
+            }
+        }
+
+        // ===== WORLD MANAGER CLASS =====
+        class WorldManager {
+            constructor(renderScale) {
+                this.renderScale = renderScale;
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+                this.renderer.setSize(window.innerWidth * renderScale, window.innerHeight * renderScale, false);
+                this.renderer.domElement.style.imageRendering = 'pixelated';
+                document.body.appendChild(this.renderer.domElement);
+                this.scene.background = new THREE.Color(0x050510);
+                this.setupLighting();
+            }
+
+            setupLighting() {
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(5, 10, 5);
+                this.scene.add(dirLight);
+            }
+
+            add(obj) { this.scene.add(obj); }
+            remove(obj) { this.scene.remove(obj); }
+            render() { this.renderer.render(this.scene, this.camera); }
+
+            resize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth * this.renderScale, window.innerHeight * this.renderScale, false);
+            }
+
+            getMat(color, flat = true) {
+                return new THREE.MeshToonMaterial({ color: color, flatShading: flat });
+            }
+        }
+
+        // ===== ENTITY FACTORY CLASS =====
+        class EntityFactory {
+            constructor(world, state) {
+                this.world = world;
+                this.state = state;
+                this.O_Y = -1.4;
+            }
+
+            getMat(color, flat = true) { return this.world.getMat(color, flat); }
+
+            generatePalette(sphereColor) {
+                let hue;
+                if (!sphereColor) hue = Math.random();
+                else {
+                    let base = sphereColor === 'red' ? 0.95 : sphereColor === 'blue' ? 0.6 : 0.1;
+                    hue = (base + (Math.random() - 0.5) * 0.3) % 1;
+                    if (hue < 0) hue += 1;
+                }
+                const baseDark = new THREE.Color().setHSL(hue, 0.2, 0.15);
+                const soil = new THREE.Color().setHSL((hue + 0.05) % 1, 0.3, 0.25);
+                const floraHue = (hue + 0.2 + Math.random() * 0.4) % 1;
+                const flora = new THREE.Color().setHSL(floraHue, 0.5 + Math.random() * 0.4, 0.3 + Math.random() * 0.3);
+                const groundTop = flora.clone().multiplyScalar(0.75);
+                const creatureHue = (floraHue + 0.5) % 1;
+                const creature = new THREE.Color().setHSL(creatureHue, 0.8, 0.6);
+                const accent = new THREE.Color().setHSL((creatureHue + 0.2) % 1, 0.9, 0.6);
+                const background = new THREE.Color().setHSL((hue + 0.5) % 1, 0.3, 0.8);
+                return { background, baseRock: baseDark, trunk: baseDark, soil, groundTop, flora, tallGrass: flora, creature, accent };
+            }
+
+            generateWorldDNA() {
+                const eyeRoll = Math.random();
+                const eyeCount = eyeRoll < 0.1 ? 1 : eyeRoll < 0.2 ? 3 : 2;
+                return {
+                    tree: { shape: ['cone', 'box', 'round', 'cylinder'][Math.floor(Math.random() * 4)], heightMod: 1.2 + Math.random() * 1.0, thickMod: 0.6 + Math.random() },
+                    bush: { shape: ['sphere', 'cone'][Math.floor(Math.random() * 2)], scaleY: 0.7 + Math.random() * 0.5 },
+                    rock: { shape: ['ico', 'box', 'dodec', 'slab'][Math.floor(Math.random() * 4)], stretch: 0.8 + Math.random() * 0.8 },
+                    creature: { shape: ['box', 'sphere'][Math.floor(Math.random() * 2)], eyes: eyeCount, scale: 0.9 + Math.random() * 0.5, eyeScale: 1.0 + Math.random() * 0.6 },
+                    grass: { height: 0.3 + Math.random() * 0.5 }
+                };
+            }
+
+            generateTerrain(r, s, min, max) {
+                const geo = new THREE.CircleGeometry(r, s);
+                const pos = geo.attributes.position;
+                for (let i = 1; i < pos.count; i++) pos.setZ(i, pos.getZ(i) + (Math.random() - 0.5) * (max - min));
+                pos.setZ(pos.count - 1, pos.getZ(1));
+                geo.computeVertexNormals();
+                return geo;
+            }
+
+            createBubbleTexture(char, color) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 64; canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(32, 32, 24, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = color;
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(char, 32, 34);
+                const tex = new THREE.CanvasTexture(canvas);
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+                sprite.scale.set(0.6, 0.6, 1);
+                sprite.position.y = 1.0;
+                return sprite;
+            }
+
+            disposeHierarchy(obj) {
+                if (!obj) return;
+                obj.traverse(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) Array.isArray(child.material) ? child.material.forEach(m => m.dispose()) : child.material.dispose();
+                });
+            }
+
+            createTree(p, x, z, style = null) {
+                const g = new THREE.Group();
+                const dna = style || {
+                    color: p.flora.clone(), trunkColor: p.trunk.clone(), shape: this.state.worldDNA.tree.shape,
+                    height: 1.5 * this.state.worldDNA.tree.heightMod + Math.random() * 0.5, thickness: 0.2 * this.state.worldDNA.tree.thickMod
+                };
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(dna.thickness * 0.7, dna.thickness, dna.height, 5), this.getMat(dna.trunkColor));
+                trunk.position.y = dna.height / 2;
+                let leafGeo = dna.shape === 'cone' ? new THREE.ConeGeometry(1.0, 1.8, 5) :
+                    dna.shape === 'box' ? new THREE.BoxGeometry(1.2, 1.2, 1.2) :
+                        dna.shape === 'cylinder' ? new THREE.CylinderGeometry(0.8, 0.8, 1.0, 6) : new THREE.DodecahedronGeometry(0.9);
+                const leaves = new THREE.Mesh(leafGeo, this.getMat(dna.color));
+                leaves.position.y = dna.height;
+                if (dna.shape === 'cone') leaves.position.y += 0.2;
+                g.add(trunk, leaves);
+                g.position.set(x, this.O_Y, z);
+                g.rotation.y = Math.random() * Math.PI * 2;
+                g.scale.set(0, 0, 0);
+                g.userData = { type: 'tree', radius: 0.6, style: dna, color: dna.color, productionTimer: Math.random() * 20 };
+                this.state.obstacles.push(g);
+                return g;
+            }
+
+            createBush(p, x, z, style = null) {
+                const g = new THREE.Group();
+                const dna = style || { color: p.flora.clone(), shape: this.state.worldDNA.bush.shape, scaleY: this.state.worldDNA.bush.scaleY };
+                let geo = dna.shape === 'flat' ? new THREE.BoxGeometry(0.8, 0.1, 0.8) :
+                    dna.shape === 'box' ? new THREE.BoxGeometry(0.6, 0.6, 0.6) :
+                        dna.shape === 'cone' ? new THREE.ConeGeometry(0.4, 0.7, 5) : new THREE.DodecahedronGeometry(0.4);
+                const m = new THREE.Mesh(geo, this.getMat(dna.color));
+                m.position.y = dna.shape === 'flat' ? 0.05 : 0.35 * dna.scaleY;
+                if (dna.shape !== 'flat') m.scale.y = dna.scaleY;
+                g.add(m);
+                g.position.set(x, this.O_Y, z);
+                g.rotation.y = Math.random() * Math.PI * 2;
+                g.scale.set(0, 0, 0);
+                g.userData = { type: 'bush', radius: 0.4, style: dna, color: dna.color, productionTimer: Math.random() * 20 };
+                return g;
+            }
+
+            createRock(p, x, z, style = null) {
+                const g = new THREE.Group();
+                const dna = style || { color: p.baseRock.clone(), shape: this.state.worldDNA.rock.shape };
+                let geo = dna.shape === 'ico' ? new THREE.IcosahedronGeometry(0.35, 0) :
+                    dna.shape === 'box' ? new THREE.BoxGeometry(0.6, 0.5, 0.6) :
+                        dna.shape === 'slab' ? new THREE.BoxGeometry(0.7, 0.25, 0.5) : new THREE.DodecahedronGeometry(0.35);
+                const m = new THREE.Mesh(geo, this.getMat(dna.color));
+                if (dna.shape === 'slab') m.rotation.y = Math.random() * Math.PI;
+                else m.rotation.set(Math.random(), Math.random(), Math.random());
+                g.add(m);
+                g.position.set(x, this.O_Y, z);
+                g.scale.set(0, 0, 0);
+                g.userData = { type: 'rock', style: dna, color: dna.color };
+                return g;
+            }
+
+            createGrass(p, x, z, style = null) {
+                const g = new THREE.Group();
+                const h = (style ? style.height : this.state.worldDNA.grass.height);
+                const dna = style || { color: p.tallGrass.clone(), height: h };
+                const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, dna.height, 0.07), this.getMat(dna.color));
+                m.position.y = dna.height / 2;
+                g.add(m);
+                g.position.set(x, this.O_Y, z);
+                g.scale.set(0, 0, 0);
+                g.userData = { type: 'grass', style: dna, color: dna.color, growTimer: Math.random() * 30 };
+                return g;
+            }
+
+            createFlower(p, x, z, style = null) {
+                const g = new THREE.Group();
+                const dna = style || { stemColor: p.flora.clone(), petalColor: p.background.clone().offsetHSL(0, 0, 0.1), centerColor: p.creature.clone(), height: 0.5 + Math.random() * 0.2 };
+                const stem = new THREE.Mesh(new THREE.BoxGeometry(0.05, dna.height, 0.05), this.getMat(dna.stemColor));
+                stem.position.y = dna.height / 2;
+                const petals = new THREE.Mesh(new THREE.DodecahedronGeometry(0.15), this.getMat(dna.petalColor));
+                petals.position.y = dna.height;
+                const center = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), this.getMat(dna.centerColor));
+                center.position.y = dna.height + 0.1;
+                g.add(stem, petals, center);
+                g.position.set(x, this.O_Y, z);
+                g.scale.set(0, 0, 0);
+                g.userData = { type: 'flower', style: dna, color: dna.petalColor };
+                return g;
+            }
+
+            createCreature(p, x, z, style = null) {
+                const g = new THREE.Group();
+                const dna = style || {
+                    color: p.creature.clone(), bodyShape: this.state.worldDNA.creature.shape,
+                    eyeCount: this.state.worldDNA.creature.eyes, scale: this.state.worldDNA.creature.scale,
+                    eyeScale: this.state.worldDNA.creature.eyeScale
+                };
+                let body = dna.bodyShape === 'box' ? new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.3, 0.42), this.getMat(dna.color)) :
+                    new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), this.getMat(dna.color));
+                body.position.y = 0.15;
+                g.add(body);
+                const baseEyeR = 0.045 * dna.scale * (dna.eyeScale || 1.0);
+                const eyeGeo = new THREE.SphereGeometry(baseEyeR, 4, 4);
+                const pupGeo = new THREE.SphereGeometry(baseEyeR * 0.4, 4, 4);
+                const eyeMat = this.getMat(0xffffff);
+                const pupMat = this.getMat(0x000000);
+                const addEye = (px, py, pz, ry) => {
+                    const e = new THREE.Group();
+                    const em = new THREE.Mesh(eyeGeo, eyeMat);
+                    const pm = new THREE.Mesh(pupGeo, pupMat);
+                    pm.position.z = baseEyeR * 0.7;
+                    e.add(em, pm);
+                    e.position.set(px, py, pz);
+                    e.rotation.y = ry;
+                    e.userData = { isEye: true };
+                    return e;
+                };
+                if (dna.bodyShape === 'box') {
+                    const sideX = 0.19, eyeY = 0.22, eyeZ = 0.15, rot = 0;
+                    if (dna.eyeCount === 1) g.add(addEye(0, eyeY, 0.22, rot));
+                    else if (dna.eyeCount === 2) { g.add(addEye(sideX, eyeY, eyeZ, rot)); g.add(addEye(-sideX, eyeY, eyeZ, rot)); }
+                    else { g.add(addEye(sideX, eyeY, eyeZ, rot)); g.add(addEye(-sideX, eyeY, eyeZ, rot)); g.add(addEye(0, eyeY + 0.08, 0.22, 0)); }
+                } else {
+                    const isFrontEyes = Math.random() < 0.5;
+                    const eyeY = 0.22;
+                    if (isFrontEyes) {
+                        const eyeZ = 0.18;
+                        if (dna.eyeCount === 1) g.add(addEye(0, eyeY, eyeZ, 0));
+                        else if (dna.eyeCount === 2) { g.add(addEye(0.08, eyeY, eyeZ, 0.2)); g.add(addEye(-0.08, eyeY, eyeZ, -0.2)); }
+                        else { g.add(addEye(0, eyeY + 0.05, eyeZ, 0)); g.add(addEye(0.1, eyeY - 0.02, eyeZ - 0.02, 0.25)); g.add(addEye(-0.1, eyeY - 0.02, eyeZ - 0.02, -0.25)); }
+                    } else {
+                        const eyeX = 0.15, eyeZ = 0.12, rot = 0.3;
+                        if (dna.eyeCount === 1) g.add(addEye(0, eyeY, 0.35, 0));
+                        else if (dna.eyeCount === 2) { g.add(addEye(eyeX, eyeY, eyeZ, rot)); g.add(addEye(-eyeX, eyeY, eyeZ, -rot)); }
+                        else { g.add(addEye(eyeX, eyeY, eyeZ, rot)); g.add(addEye(-eyeX, eyeY, eyeZ, -rot)); g.add(addEye(0, eyeY + 0.1, 0.25, 0)); }
+                    }
+                }
+                g.position.set(x, this.O_Y + 0.3, z);
+                g.scale.set(0, 0, 0);
+                g.userData = {
+                    type: 'creature', radius: 0.5, hunger: 0, age: 0, eatenCount: 0,
+                    moveSpeed: 0.03, hopOffset: Math.random() * 100,
+                    color: dna.color, bubble: null, style: dna, targetScale: dna.scale, cooldown: 0
+                };
+                this.state.obstacles.push(g);
+                return g;
+            }
+
+            createChief(p, x, z) {
+                const g = new THREE.Group();
+                const color = p.creature.clone().lerp(new THREE.Color(0xffd700), 0.5);
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.9, 8), this.getMat(color));
+                body.position.y = 0.45;
+                const crown = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.6, 6), this.getMat(new THREE.Color(0xffaa00)));
+                crown.position.y = 1.1;
+                const eyeGeo = new THREE.SphereGeometry(0.08, 4, 4);
+                const eyeMat = this.getMat(0xffffff);
+                const e1 = new THREE.Mesh(eyeGeo, eyeMat); e1.position.set(0.15, 0.7, 0.25);
+                const e2 = new THREE.Mesh(eyeGeo, eyeMat); e2.position.set(-0.15, 0.7, 0.25);
+                g.add(body, crown, e1, e2);
+                g.position.set(x, this.O_Y + 0.3, z);
+                g.userData = { type: 'chief', radius: 0.6, moveSpeed: 0.045, color: color, fleeTimer: 0 };
+                this.state.obstacles.push(g);
+                return g;
+            }
+
+            createEgg(pos, color, dna) {
+                const g = new THREE.Group();
+                const eggMesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), this.getMat(color));
+                eggMesh.scale.y = 1.3;
+                g.add(eggMesh);
+                g.position.set(pos.x, this.O_Y + 0.3, pos.z);
+                g.scale.set(0, 0, 0);
+                g.userData = { type: 'egg', color: color, parentDNA: dna, hatchTimer: 10.0 };
+                return g;
+            }
+
+            createParticle(pos, col, size = 1) {
+                const spriteMat = new THREE.SpriteMaterial({ color: col, transparent: true, opacity: 1 });
+                const p = new THREE.Sprite(spriteMat);
+                p.scale.set(0.075 * size, 0.075 * size, 1);
+                p.position.copy(pos);
+                p.position.x += (Math.random() - 0.5) * 0.4;
+                p.position.y += (Math.random() - 0.5) * 0.4;
+                p.position.z += (Math.random() - 0.5) * 0.4;
+                p.userData = {
+                    vel: new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).normalize().multiplyScalar(0.05 * size),
+                    life: 1.0, maxLife: 1.0
+                };
+                this.world.add(p);
+                this.state.particles.push(p);
+            }
+
+            createIsland(palette) {
+                const g = new THREE.Group();
+                const base = new THREE.Mesh(this.generateTerrain(7, 30, -0.3, 0.3), this.getMat(palette.baseRock));
+                base.rotation.x = -Math.PI / 2; base.position.y = -2;
+                const soil = new THREE.Mesh(this.generateTerrain(6.5, 30, -0.2, 0.2), this.getMat(palette.soil));
+                soil.rotation.x = -Math.PI / 2; soil.position.y = -1.5;
+                const grass = new THREE.Mesh(this.generateTerrain(6.3, 30, -0.1, 0.1), this.getMat(palette.groundTop));
+                grass.rotation.x = -Math.PI / 2; grass.position.y = this.O_Y;
+                grass.userData = { type: 'ground' };
+                const waterGeo = new THREE.CircleGeometry(60, 40);
+                const wp = waterGeo.attributes.position;
+                for (let i = 1; i < wp.count; i++) wp.setZ(i, wp.getZ(i) + (Math.random() - 0.5) * 0.8);
+                waterGeo.computeVertexNormals();
+                const waterColor = palette.background.clone().lerp(new THREE.Color(0x0066aa), 0.7);
+                const water = new THREE.Mesh(waterGeo, new THREE.MeshPhongMaterial({ color: waterColor, transparent: true, opacity: 0.6, shininess: 90, flatShading: true }));
+                water.rotation.x = -Math.PI / 2;
+                water.position.y = -2.0;
+                water.userData = { type: 'water' };
+                g.add(base, soil, grass, water);
+                return { group: g, groundPlane: grass };
+            }
+        }
+
+        // ===== INPUT HANDLER CLASS =====
+        class InputHandler {
+            constructor(engine) {
+                this.engine = engine;
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.setupKeyboard();
+                this.setupMouse();
+                this.setupTouch();
+            }
+
+            setupKeyboard() {
+                const state = this.engine.state;
+                const sfx = this.engine.audio;
+                document.addEventListener('keydown', (e) => {
+                    const k = e.key.toLowerCase();
+                    if (k === 'w') state.inputs.w = true;
+                    if (k === 'a') state.inputs.a = true;
+                    if (k === 's') state.inputs.s = true;
+                    if (k === 'd') state.inputs.d = true;
+                    if (k === ' ') state.inputs.space = true;
+                    if (state.phase === 'playing' && !isNaN(parseInt(k)) && parseInt(k) >= 1 && parseInt(k) <= 8) {
+                        const idx = parseInt(k) - 1;
+                        if (state.selectedSlot === idx) { state.selectedSlot = null; sfx.select(); }
+                        else if (state.inventory[idx]) { state.selectedSlot = idx; sfx.select(); }
+                        this.engine.updateInventory();
+                    }
+                    if (k === 'm' && state.gameMode === 'fps') document.exitPointerLock();
+                });
+                document.addEventListener('keyup', (e) => {
+                    const k = e.key.toLowerCase();
+                    if (k === 'w') state.inputs.w = false;
+                    if (k === 'a') state.inputs.a = false;
+                    if (k === 's') state.inputs.s = false;
+                    if (k === 'd') state.inputs.d = false;
+                    if (k === ' ') state.inputs.space = false;
+                });
+            }
+
+            setupMouse() {
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const renderer = world.renderer;
+                document.addEventListener('mousedown', (e) => {
+                    if (state.phase === 'playing' && state.gameMode === 'fps' &&
+                        document.pointerLockElement !== renderer.domElement &&
+                        !document.getElementById('settings-popup').classList.contains('open') &&
+                        e.target === renderer.domElement) {
+                        renderer.domElement.requestPointerLock();
+                        document.getElementById('fps-msg').style.display = 'none';
+                    }
+                });
+                document.addEventListener('mousemove', (e) => {
+                    if (document.pointerLockElement === renderer.domElement && state.gameMode === 'fps') {
+                        state.player.targetYaw -= e.movementX * state.sensitivity;
+                        state.player.targetPitch -= e.movementY * state.sensitivity;
+                        state.player.targetPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, state.player.targetPitch));
+                    }
+                });
+                window.addEventListener('wheel', (e) => {
+                    if (state.phase !== 'playing') return;
+                    if (state.gameMode === 'fps') {
+                        if (e.deltaY > 0) state.selectedSlot = (state.selectedSlot === null ? 0 : (state.selectedSlot + 1) % 8);
+                        else state.selectedSlot = (state.selectedSlot === null ? 7 : (state.selectedSlot - 1 + 8) % 8);
+                        if (state.selectedSlot !== null && !state.inventory[state.selectedSlot]) { }
+                        this.engine.updateInventory();
+                    } else {
+                        state.camRadius += e.deltaY * 0.01;
+                        state.camRadius = Math.max(5, Math.min(20, state.camRadius));
+                    }
+                });
+                window.addEventListener('scroll', (e) => e.preventDefault(), { passive: false });
+                window.addEventListener('contextmenu', (e) => e.preventDefault(), { passive: false });
+                this.setupPointerEvents();
+            }
+
+            setupPointerEvents() {
+                const renderer = this.engine.world.renderer;
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const factory = this.engine.factory;
+                const sfx = this.engine.audio;
+                const cursor = document.getElementById('custom-cursor');
+                const flash = document.getElementById('white-flash');
+
+                renderer.domElement.addEventListener('pointerdown', (e) => {
+                    if (e.button !== 0) return;
+                    if (!e.isPrimary) return;
+                    if (state.interaction.isZooming) return;
+
+                    if (state.gameMode === 'fps') {
+                        if (document.pointerLockElement !== renderer.domElement) return;
+                        const now = performance.now();
+                        if (now - (state.lastInteractTime || 0) < 800) return;
+                        state.lastInteractTime = now;
+                        this.raycaster.setFromCamera(new THREE.Vector2(0, 0), world.camera);
+                        if (state.selectedSlot !== null) {
+                            this.handleFPSPlace();
+                            return;
+                        }
+                        this.handleFPSPickup();
+                        return;
+                    }
+
+                    cursor.classList.add('active');
+                    state.interaction.pressTime = performance.now();
+                    state.interaction.startPos.set(e.clientX, e.clientY);
+                    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                    this.raycaster.setFromCamera(this.mouse, world.camera);
+
+                    if (state.phase === 'essence') {
+                        const hits = this.raycaster.intersectObjects(this.engine.spheres, true);
+                        if (hits.length && !state.selectedEssence) {
+                            sfx.select();
+                            const grp = hits[0].object.parent;
+                            state.selectedEssence = grp;
+                            state.selectionProgress = 0;
+                            state.phase = 'essence-transition';
+                            flash.style.transition = 'opacity 0.8s';
+                        }
+                        return;
+                    }
+
+                    const hits = this.raycaster.intersectObjects(state.entities, true);
+                    if (hits.length) {
+                        let root = hits[0].object;
+                        while (root.parent && root.parent !== world.scene) root = root.parent;
+                        if (root.userData.type) {
+                            state.interaction.heldEntity = root;
+                            if (root.userData.type === 'creature') root.userData.held = true;
+                            return;
+                        }
+                    }
+                    state.interaction.mode = 'panning';
+                });
+
+                renderer.domElement.addEventListener('pointermove', (e) => {
+                    state.mouseX = e.clientX;
+                    state.mouseY = e.clientY;
+                    if (state.interaction.isZooming) return;
+                    if (state.phase === 'essence') {
+                        this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                        this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                        this.raycaster.setFromCamera(this.mouse, world.camera);
+                        const hits = this.raycaster.intersectObjects(this.engine.spheres, true);
+                        if (hits.length) {
+                            const grp = hits[0].object.parent;
+                            if (state.hoveredSphere !== grp) {
+                                state.hoveredSphere = grp;
+                                sfx.chirp(400 + this.engine.spheres.indexOf(grp) * 100, 500 + this.engine.spheres.indexOf(grp) * 100, 0.08, 0.02);
+                            }
+                        } else state.hoveredSphere = null;
+                    }
+                    if (state.interaction.mode === 'panning') {
+                        state.camAngle -= (e.clientX - state.interaction.startPos.x) * 0.005;
+                        state.interaction.startPos.x = e.clientX;
+                    } else if (state.interaction.heldEntity && state.interaction.heldEntity.userData.type === 'creature') {
+                        this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                        this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                        this.raycaster.setFromCamera(this.mouse, world.camera);
+                        const hits = this.raycaster.intersectObject(this.engine.groundPlane);
+                        if (hits.length) {
+                            state.interaction.heldEntity.position.copy(hits[0].point);
+                            state.interaction.heldEntity.position.y = factory.O_Y + 0.5;
+                        }
+                    }
+                });
+
+                renderer.domElement.addEventListener('pointerup', (e) => {
+                    if (e.button !== 0) return;
+                    cursor.classList.remove('active');
+                    if (state.interaction.isZooming) return;
+                    const dt = performance.now() - state.interaction.pressTime;
+                    const held = state.interaction.heldEntity;
+                    if (state.phase === 'playing') {
+                        if (state.selectedSlot !== null && !held) {
+                            this.handleCreatorPlace(e);
+                        } else if (held) {
+                            this.handleCreatorPickup(held, dt);
+                        } else if (dt < 200) {
+                            this.handleQuickTap(e);
+                        }
+                    }
+                    state.interaction.heldEntity = null;
+                    state.interaction.mode = 'idle';
+                });
+            }
+
+            handleFPSPlace() {
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const factory = this.engine.factory;
+                const sfx = this.engine.audio;
+                const hits = this.raycaster.intersectObject(this.engine.groundPlane);
+                if (hits.length && hits[0].distance < 12) {
+                    sfx.place();
+                    const p = hits[0].point;
+                    const it = state.inventory[state.selectedSlot];
+                    let ent = this.createEntityFromItem(it, p);
+                    if (ent) {
+                        for (let i = 0; i < 5; i++) factory.createParticle(p, it.color);
+                        it.count = (it.count || 1) - 1;
+                        if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+                        this.engine.updateInventory();
+                    }
+                }
+            }
+
+            handleFPSPickup() {
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const factory = this.engine.factory;
+                const sfx = this.engine.audio;
+                const foodHits = this.raycaster.intersectObjects(state.foods, true);
+                if (foodHits.length && foodHits[0].distance < 8) {
+                    const f = foodHits[0].object;
+                    sfx.pickup();
+                    const color = f.material.color;
+                    const success = this.engine.addToInventory('food', color, null, 0);
+                    if (success) {
+                        const center = f.position.clone();
+                        for (let i = 0; i < 15; i++) factory.createParticle(center, color, 1.0);
+                        world.remove(f);
+                        state.foods.splice(state.foods.indexOf(f), 1);
+                    } else sfx.pop();
+                    return;
+                }
+                const hits = this.raycaster.intersectObjects(state.entities, true);
+                if (hits.length && hits[0].distance < 8) {
+                    let root = hits[0].object;
+                    while (root.parent && root.parent !== world.scene) root = root.parent;
+                    if (root.userData.type === 'chief') {
+                        document.exitPointerLock();
+                        const d = document.getElementById('dialog-box');
+                        d.style.display = 'flex';
+                        document.getElementById('dialog-text').innerHTML = "CHIEF:<br>Run! The giant is chasing me!<br>...Wait, are you friendly?";
+                        sfx.sing();
+                    } else if (root.userData.type) {
+                        sfx.pickup();
+                        let styleData = root.userData.style;
+                        if (root.userData.type === 'egg') styleData = root.userData.parentDNA;
+                        const success = this.engine.addToInventory(root.userData.type, root.userData.color, styleData, root.userData.age);
+                        if (success) {
+                            const center = root.position.clone(); center.y += 0.5;
+                            for (let i = 0; i < 25; i++) factory.createParticle(center, root.userData.color, 1.5);
+                            world.remove(root);
+                            state.entities.splice(state.entities.indexOf(root), 1);
+                            if (state.obstacles.includes(root)) state.obstacles.splice(state.obstacles.indexOf(root), 1);
+                        } else sfx.pop();
+                    }
+                }
+            }
+
+            handleCreatorPlace(e) {
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const factory = this.engine.factory;
+                const sfx = this.engine.audio;
+                this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                this.raycaster.setFromCamera(this.mouse, world.camera);
+                const hits = this.raycaster.intersectObject(this.engine.groundPlane);
+                if (hits.length) {
+                    sfx.place();
+                    const p = hits[0].point;
+                    const it = state.inventory[state.selectedSlot];
+                    let ent = this.createEntityFromItem(it, p);
+                    if (ent) {
+                        for (let i = 0; i < 5; i++) factory.createParticle(p, it.color);
+                        it.count = (it.count || 1) - 1;
+                        if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+                        this.engine.updateInventory();
+                    }
+                }
+            }
+
+            handleCreatorPickup(held, dt) {
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const factory = this.engine.factory;
+                const sfx = this.engine.audio;
+                if (held.userData.type === 'creature') held.userData.held = false;
+                if (dt > 300) {
+                    sfx.pickup();
+                    const idx = state.entities.indexOf(held);
+                    if (idx > -1) {
+                        let styleData = held.userData.style;
+                        if (held.userData.type === 'egg') styleData = held.userData.parentDNA;
+                        const success = this.engine.addToInventory(held.userData.type, held.userData.color, styleData, held.userData.age);
+                        if (success) {
+                            const center = held.position.clone(); center.y += 0.5;
+                            for (let i = 0; i < 25; i++) factory.createParticle(center, held.userData.color, 1.5);
+                            world.remove(held);
+                            state.entities.splice(idx, 1);
+                            if (state.obstacles.includes(held)) state.obstacles.splice(state.obstacles.indexOf(held), 1);
+                        } else sfx.pop();
+                    }
+                } else {
+                    if (held.userData.type === 'creature') sfx.pet(); else sfx.pop();
+                    held.rotation.z = 0.5;
+                    setTimeout(() => held.rotation.z = 0, 150);
+                }
+            }
+
+            handleQuickTap(e) {
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const factory = this.engine.factory;
+                const sfx = this.engine.audio;
+                this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                this.raycaster.setFromCamera(this.mouse, world.camera);
+                const hits = this.raycaster.intersectObject(this.engine.groundPlane);
+                if (hits.length) {
+                    sfx.pop();
+                    const foodHits = this.raycaster.intersectObjects(state.foods, true);
+                    if (foodHits.length) {
+                        const f = foodHits[0].object;
+                        sfx.pickup();
+                        const success = this.engine.addToInventory('food', f.material.color, null, 0);
+                        if (success) { world.remove(f); state.foods.splice(state.foods.indexOf(f), 1); }
+                        else sfx.pop();
+                        return;
+                    }
+                    const fl = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15), factory.getMat(state.palette.accent));
+                    fl.position.copy(hits[0].point); fl.position.y = factory.O_Y + 0.15;
+                    fl.scale.set(0, 0, 0);
+                    world.add(fl); state.foods.push(fl);
+                }
+            }
+
+            createEntityFromItem(it, p) {
+                const state = this.engine.state;
+                const world = this.engine.world;
+                const factory = this.engine.factory;
+                let ent = null;
+                if (it.type === 'tree') ent = factory.createTree(state.palette, p.x, p.z, it.style);
+                if (it.type === 'bush') ent = factory.createBush(state.palette, p.x, p.z, it.style);
+                if (it.type === 'rock') ent = factory.createRock(state.palette, p.x, p.z, it.style);
+                if (it.type === 'grass') ent = factory.createGrass(state.palette, p.x, p.z, it.style);
+                if (it.type === 'flower') ent = factory.createFlower(state.palette, p.x, p.z, it.style);
+                if (it.type === 'creature') {
+                    ent = factory.createCreature(state.palette, p.x, p.z, it.style);
+                    if (it.age) ent.userData.age = it.age;
+                    world.add(ent);
+                }
+                if (it.type === 'egg') { ent = factory.createEgg(p, it.color, it.style); world.add(ent); }
+                if (it.type === 'food') {
+                    ent = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15), factory.getMat(it.color));
+                    ent.position.copy(p); ent.position.y = factory.O_Y + 0.15;
+                    ent.scale.set(0, 0, 0);
+                    world.add(ent); state.foods.push(ent);
+                }
+                if (ent) {
+                    if (it.type !== 'creature' && it.type !== 'egg' && it.type !== 'food') world.add(ent);
+                    if (it.type !== 'food') state.entities.push(ent);
+                }
+                return ent;
+            }
+
+            setupTouch() {
+                const renderer = this.engine.world.renderer;
+                const state = this.engine.state;
+                renderer.domElement.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        state.interaction.isZooming = true;
+                        const dx = e.touches[0].pageX - e.touches[1].pageX;
+                        const dy = e.touches[0].pageY - e.touches[1].pageY;
+                        state.zoomStart = Math.sqrt(dx * dx + dy * dy);
+                    } else if (e.touches.length === 1 && state.phase === 'playing') {
+                        const reticle = document.getElementById('touch-reticle');
+                        reticle.classList.add('active');
+                        reticle.style.left = e.touches[0].clientX + 'px';
+                        reticle.style.top = e.touches[0].clientY + 'px';
+                    }
+                });
+                renderer.domElement.addEventListener('touchend', (e) => {
+                    if (e.touches.length < 2) state.interaction.isZooming = false;
+                    if (e.touches.length === 0) document.getElementById('touch-reticle').classList.remove('active');
+                });
+                renderer.domElement.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2 && state.phase === 'playing') {
+                        state.interaction.isZooming = true;
+                        const dx = e.touches[0].pageX - e.touches[1].pageX;
+                        const dy = e.touches[0].pageY - e.touches[1].pageY;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const delta = state.zoomStart - dist;
+                        state.camRadius += delta * 0.05;
+                        state.camRadius = Math.max(5, Math.min(20, state.camRadius));
+                        state.zoomStart = dist;
+                    } else if (e.touches.length === 1) {
+                        const reticle = document.getElementById('touch-reticle');
+                        reticle.style.left = e.touches[0].clientX + 'px';
+                        reticle.style.top = e.touches[0].clientY + 'px';
+                    }
+                });
+            }
+        }
+
+        // ===== GAME ENGINE CLASS =====
+        class GameEngine {
+            constructor() {
+                this.audio = new AudioManager();
+                this.state = new GameState();
+                this.world = new WorldManager(0.5);
+                this.factory = new EntityFactory(this.world, this.state);
+                this.spheres = [];
+                this.islandGroup = null;
+                this.groundPlane = null;
+                this.ui = {};
+                this.setupUI();
+                this.initSpheres();
+                this.input = new InputHandler(this);
+                this.setupButtons();
+                this.animate = this.animate.bind(this);
+                this.animate(0);
+                window.onresize = () => this.world.resize();
+            }
+
+            setupUI() {
+                this.ui.cursor = document.getElementById('custom-cursor');
+                this.ui.essenceScreen = document.getElementById('essence-screen');
+                this.ui.invContainer = document.getElementById('inventory-container');
+                this.ui.invGrid = document.getElementById('inventory-grid');
+                this.ui.resetBtn = document.getElementById('reset-btn');
+                this.ui.flash = document.getElementById('white-flash');
+                this.ui.crosshair = document.getElementById('crosshair');
+                this.ui.fpsMsg = document.getElementById('fps-msg');
+                this.ui.modeCreatorBtn = document.getElementById('mode-creator');
+                this.ui.modeFpsBtn = document.getElementById('mode-fps');
+                this.ui.sensSlider = document.getElementById('sens-slider');
+                this.ui.growBtn = document.getElementById('grow-btn');
+                this.ui.volSlider = document.getElementById('vol-slider');
+                this.ui.volIcon = document.getElementById('vol-icon');
+                this.ui.settingsBtn = document.getElementById('settings-btn');
+                this.ui.settingsPopup = document.getElementById('settings-popup');
+                for (let i = 0; i < 8; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'slot';
+                    div.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (this.state.selectedSlot === i) { this.state.selectedSlot = null; this.audio.select(); }
+                        else if (this.state.inventory[i]) { this.state.selectedSlot = i; this.audio.select(); }
+                        this.updateInventory();
+                    });
+                    this.ui.invGrid.appendChild(div);
+                }
+            }
+
+            setupButtons() {
+                this.ui.modeCreatorBtn.addEventListener('click', () => this.switchGameMode('creator'));
+                this.ui.modeFpsBtn.addEventListener('click', () => this.switchGameMode('fps'));
+                this.ui.sensSlider.addEventListener('input', (e) => this.state.sensitivity = e.target.value / 500);
+                this.state.sensitivity = this.ui.sensSlider.value / 500;
+                this.ui.growBtn.addEventListener('click', () => this.growTerrain());
+                this.ui.resetBtn.addEventListener('click', () => this.resetWorld());
+            }
+
+            switchGameMode(mode) {
+                this.state.gameMode = mode;
+                const camera = this.world.camera;
+                if (mode === 'fps') {
+                    this.ui.modeFpsBtn.classList.add('active');
+                    this.ui.modeCreatorBtn.classList.remove('active');
+                    this.ui.crosshair.style.display = 'block';
+                    this.ui.fpsMsg.style.display = 'block';
+                    this.ui.cursor.style.display = 'none';
+                    if (this.state.player.pos.y < -10) this.state.player.pos.set(0, 5, 0);
+                    camera.rotation.set(0, 0, 0);
+                    camera.up.set(0, 1, 0);
+                    this.state.player.yaw = 0; this.state.player.pitch = 0;
+                    this.state.player.targetYaw = 0; this.state.player.targetPitch = 0;
+                    camera.fov = 93; camera.updateProjectionMatrix();
+                } else {
+                    this.ui.modeCreatorBtn.classList.add('active');
+                    this.ui.modeFpsBtn.classList.remove('active');
+                    this.ui.crosshair.style.display = 'none';
+                    this.ui.fpsMsg.style.display = 'none';
+                    this.ui.cursor.style.display = 'block';
+                    if (document.pointerLockElement) document.exitPointerLock();
+                    camera.fov = 50; camera.updateProjectionMatrix();
+                }
+            }
+
+            addToInventory(type, color, style, age = 0) {
+                const isStackable = ['creature', 'egg'].indexOf(type) === -1;
+                if (isStackable) {
+                    const existingIdx = this.state.inventory.findIndex(item =>
+                        item && item.type === type && item.color.getHex() === color.getHex()
+                    );
+                    if (existingIdx !== -1) {
+                        this.state.inventory[existingIdx].count = (this.state.inventory[existingIdx].count || 1) + 1;
+                        this.updateInventory();
+                        return true;
+                    }
+                }
+                const emptyIdx = this.state.inventory.findIndex(item => item === null);
+                if (emptyIdx !== -1) {
+                    this.state.inventory[emptyIdx] = { type, color, style, age, count: 1 };
+                    this.updateInventory();
+                    return true;
+                }
+                return false;
+            }
+
+            updateInventory() {
+                const slots = document.querySelectorAll('.slot');
+                slots.forEach((el, i) => {
+                    el.innerHTML = '';
+                    el.classList.toggle('active', this.state.selectedSlot === i);
+                    const it = this.state.inventory[i];
+                    if (it) {
+                        const d = document.createElement('div');
+                        d.style.color = '#' + it.color.getHexString();
+                        d.className = `icon-${it.type}`;
+                        if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
+                        if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
+                        el.appendChild(d);
+                        if (it.count > 1) {
+                            const countEl = document.createElement('span');
+                            countEl.innerText = it.count;
+                            countEl.style.cssText = 'position:absolute;bottom:2px;right:2px;color:#fff;font-size:10px;text-shadow:1px 1px 0 #000;pointer-events:none;';
+                            el.appendChild(countEl);
+                        }
+                    }
+                });
+            }
+
+            growTerrain() {
+                if (!this.islandGroup) return;
+                const oldScale = this.islandGroup.scale.x;
+                const newScale = oldScale * 1.2;
+                this.islandGroup.scale.set(newScale, newScale, newScale);
+                this.islandGroup.position.y = this.factory.O_Y * (1 - newScale);
+                const spawnCount = Math.floor(15 * newScale);
+                const innerR = 4.0 * oldScale;
+                const outerR = 4.5 * newScale;
+                for (let i = 0; i < spawnCount; i++) {
+                    const r = innerR + Math.random() * (outerR - innerR);
+                    const theta = Math.random() * Math.PI * 2;
+                    const x = Math.cos(theta) * r;
+                    const z = Math.sin(theta) * r;
+                    const typeRoll = Math.random();
+                    let ent;
+                    if (typeRoll < 0.1) ent = this.factory.createTree(this.state.palette, x, z);
+                    else if (typeRoll < 0.25) ent = this.factory.createBush(this.state.palette, x, z);
+                    else if (typeRoll < 0.4) ent = this.factory.createRock(this.state.palette, x, z);
+                    else if (typeRoll < 0.9) ent = this.factory.createGrass(this.state.palette, x, z);
+                    else ent = this.factory.createFlower(this.state.palette, x, z);
+                    if (Math.random() < 0.05) {
+                        const c = this.factory.createCreature(this.state.palette, x, z);
+                        c.userData.age = 5;
+                        this.world.add(c); this.state.entities.push(c);
+                    } else {
+                        this.world.add(ent); this.state.entities.push(ent);
+                    }
+                }
+                this.audio.select();
+            }
+
+            resetWorld() {
+                if (this.state.phase !== 'playing') return;
+                this.audio.explode();
+                this.ui.flash.style.opacity = 1;
+                setTimeout(() => this.ui.flash.style.opacity = 0, 500);
+                for (let i = 0; i < 60; i++) {
+                    this.factory.createParticle(new THREE.Vector3(0, 0, 0), new THREE.Color(0xffffff), 4);
+                    this.factory.createParticle(new THREE.Vector3(0, 0, 0), this.state.palette.flora, 3);
+                }
+                this.state.entities.forEach(e => {
+                    e.userData.exploding = true;
+                    e.userData.vel = e.position.clone().normalize().multiplyScalar(0.2 + Math.random() * 0.3);
+                    e.userData.vel.y = 0.3 + Math.random() * 0.4;
+                    e.userData.rotVel = new THREE.Vector3(Math.random(), Math.random(), Math.random());
+                    this.state.debris.push(e);
+                });
+                this.state.foods.forEach(f => {
+                    f.userData.exploding = true;
+                    f.userData.vel = f.position.clone().normalize().multiplyScalar(0.2 + Math.random() * 0.3);
+                    f.userData.vel.y = 0.3 + Math.random() * 0.4;
+                    f.userData.rotVel = new THREE.Vector3(Math.random(), Math.random(), Math.random());
+                    this.state.debris.push(f);
+                });
+                this.state.entities = []; this.state.obstacles = []; this.state.foods = [];
+                this.islandGroup.children.forEach(c => {
+                    const chunk = c.clone(); chunk.position.copy(c.position); chunk.rotation.copy(c.rotation);
+                    this.world.add(chunk); chunk.userData.exploding = true;
+                    chunk.userData.vel = new THREE.Vector3((Math.random() - .5), -1, (Math.random() - .5)).normalize().multiplyScalar(0.2);
+                    chunk.userData.rotVel = new THREE.Vector3(0.1, 0, 0);
+                    this.state.debris.push(chunk);
+                });
+                this.world.remove(this.islandGroup);
+                this.audio.fadeOut();
+                setTimeout(() => this.initGame(null), 800);
+            }
+
+            initSpheres() {
+                const colors = ['red', 'blue', 'yellow'];
+                const positions = [new THREE.Vector3(-3, 0, 0), new THREE.Vector3(3, 0, 0), new THREE.Vector3(0, 0, 3)];
+                for (let i = 0; i < 3; i++) {
+                    const g = new THREE.Group();
+                    const sp = new THREE.Mesh(
+                        new THREE.IcosahedronGeometry(0.6, 1),
+                        new THREE.MeshBasicMaterial({ color: colors[i], wireframe: true })
+                    );
+                    const glow = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.65, 16, 16),
+                        new THREE.MeshBasicMaterial({ color: colors[i], transparent: true, opacity: 0.2 })
+                    );
+                    g.add(sp); g.add(glow);
+                    g.position.copy(positions[i]);
+                    g.userData = { baseY: 0, color: colors[i], glowMat: glow.material };
+                    this.world.add(g);
+                    this.spheres.push(g);
+                }
+                this.world.camera.position.set(0, 4, 7);
+                this.world.camera.lookAt(0, 0, 0);
+            }
+
+            initGame(sphereColor) {
+                this.state.phase = 'playing';
+                this.state.palette = this.factory.generatePalette(sphereColor);
+                this.state.worldDNA = this.factory.generateWorldDNA();
+                this.world.scene.background = this.state.palette.background;
+                this.ui.invContainer.style.display = 'flex';
+
+                const rnd = (minR = 1.0) => {
+                    const a = Math.random() * 6.28;
+                    const r = minR + Math.random() * (5.5 - minR);
+                    return { x: Math.cos(a) * r, z: Math.sin(a) * r };
+                };
+
+                const island = this.factory.createIsland(this.state.palette);
+                this.islandGroup = island.group;
+                this.groundPlane = island.groundPlane;
+                this.world.add(this.islandGroup);
+                this.state.player.pos = new THREE.Vector3(0, 5, 0);
+
+                for (let i = 0; i < 6; i++) { const p = rnd(); this.state.entities.push(this.factory.createTree(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+                for (let i = 0; i < 8; i++) { const p = rnd(); this.state.entities.push(this.factory.createBush(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+                for (let i = 0; i < 5; i++) { const p = rnd(); this.state.entities.push(this.factory.createRock(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+                for (let i = 0; i < 30; i++) { const p = rnd(0.5); this.state.entities.push(this.factory.createGrass(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+                for (let i = 0; i < 8; i++) { const p = rnd(); this.state.entities.push(this.factory.createFlower(this.state.palette, p.x, p.z)); this.world.add(this.state.entities[this.state.entities.length - 1]); }
+                for (let i = 0; i < 2; i++) { const p = rnd(); const c = this.factory.createCreature(this.state.palette, p.x, p.z); this.state.entities.push(c); this.world.add(c); }
+
+                const chiefPos = rnd(2.0);
+                const chief = this.factory.createChief(this.state.palette, chiefPos.x, chiefPos.z);
+                this.state.entities.push(chief);
+                this.world.add(chief);
+
+                if (!this.state.musicStarted) {
+                    this.audio.startMusic(this.state.worldDNA, this.ui.volSlider, this.ui.volIcon, this.ui.settingsBtn, this.ui.settingsPopup, this.audio);
+                    this.state.musicStarted = true;
+                }
+            }
+
+            updatePlayerPhysics() {
+                const state = this.state;
+                const camera = this.world.camera;
+                const O_Y = this.factory.O_Y;
+                state.player.yaw += (state.player.targetYaw - state.player.yaw) * 0.3;
+                state.player.pitch += (state.player.targetPitch - state.player.pitch) * 0.3;
+                const forward = new THREE.Vector3(-Math.sin(state.player.targetYaw), 0, -Math.cos(state.player.targetYaw));
+                const right = new THREE.Vector3(forward.z, 0, -forward.x);
+                const moveDir = new THREE.Vector3(0, 0, 0);
+                if (state.inputs.w) moveDir.add(forward);
+                if (state.inputs.s) moveDir.sub(forward);
+                if (state.inputs.a) moveDir.sub(right);
+                if (state.inputs.d) moveDir.add(right);
+                if (moveDir.length() > 0) moveDir.normalize();
+                state.player.vel.x = moveDir.x * state.player.speed;
+                state.player.vel.z = moveDir.z * state.player.speed;
+                if (state.inputs.space && state.player.canJump) {
+                    state.player.vel.y = 0.15;
+                    state.player.canJump = false;
+                }
+                state.player.vel.y -= 0.007;
+                state.player.pos.add(state.player.vel);
+                const floorY = O_Y + 1.0;
+                const groundRadius = 7 * (this.islandGroup ? this.islandGroup.scale.x : 1);
+                if (state.player.pos.y < floorY) {
+                    if (state.player.pos.x ** 2 + state.player.pos.z ** 2 < groundRadius ** 2) {
+                        state.player.pos.y = floorY;
+                        state.player.vel.y = 0;
+                        state.player.canJump = true;
+                    }
+                }
+                if (state.player.pos.y < -15) state.player.pos.set(0, 5, 0);
+                const maxDist = groundRadius * 0.95;
+                const distFromCenter = Math.sqrt(state.player.pos.x ** 2 + state.player.pos.z ** 2);
+                if (distFromCenter > maxDist) {
+                    const angle = Math.atan2(state.player.pos.z, state.player.pos.x);
+                    state.player.pos.x = Math.cos(angle) * maxDist;
+                    state.player.pos.z = Math.sin(angle) * maxDist;
+                }
+            }
+
+            animate(t) {
+                requestAnimationFrame(this.animate);
+                t *= 0.001;
+                const state = this.state;
+                const camera = this.world.camera;
+                const O_Y = this.factory.O_Y;
+
+                this.ui.cursor.style.left = state.mouseX + 'px';
+                this.ui.cursor.style.top = state.mouseY + 'px';
+
+                if (state.phase === 'essence') {
+                    this.spheres.forEach((s, i) => {
+                        s.rotation.y += 0.01;
+                        s.position.y = s.userData.baseY + Math.sin(t * 2 + i) * 0.3;
+                        const isHov = s === state.hoveredSphere;
+                        s.scale.lerp(new THREE.Vector3(isHov ? 1.4 : 1, isHov ? 1.4 : 1, isHov ? 1.4 : 1), 0.1);
+                        s.userData.glowMat.opacity = isHov ? 0.4 : 0.2;
+                    });
+                } else if (state.phase === 'essence-transition') {
+                    state.selectionProgress += 0.02;
+                    const sel = state.selectedEssence;
+                    this.spheres.forEach(s => {
+                        if (s !== sel) { s.scale.multiplyScalar(0.95); s.material && (s.material.opacity *= 0.95); }
+                        else { s.scale.lerp(new THREE.Vector3(3, 3, 3), 0.05); s.rotation.y += 0.05; }
+                    });
+                    if (state.selectionProgress > 0.5) { this.ui.flash.style.opacity = (state.selectionProgress - 0.5) * 2; }
+                    if (state.selectionProgress >= 1) {
+                        this.spheres.forEach(s => this.world.remove(s));
+                        this.spheres = [];
+                        this.ui.flash.style.opacity = 0;
+                        this.initGame(sel.userData.color);
+                    }
+                } else if (state.phase === 'playing') {
+                    if (this.islandGroup) {
+                        const water = this.islandGroup.children.find(c => c.userData.type === 'water');
+                        if (water) { water.rotation.z += 0.001; water.position.y = -2.0 + Math.sin(t * 0.5) * 0.15; }
+                    }
+                    if (state.gameMode === 'fps') {
+                        this.updatePlayerPhysics();
+                        camera.rotation.order = "YXZ";
+                        camera.rotation.y = state.player.yaw;
+                        camera.rotation.x = state.player.pitch;
+                        camera.position.copy(state.player.pos);
+                    } else {
+                        const targetY = 4 + Math.sin(t * 0.5) * 0.3;
+                        camera.position.x = Math.sin(state.camAngle) * state.camRadius;
+                        camera.position.z = Math.cos(state.camAngle) * state.camRadius;
+                        camera.position.y += (targetY - camera.position.y) * 0.05;
+                        camera.lookAt(0, 0, 0);
+                    }
+
+                    for (let i = state.entities.length - 1; i >= 0; i--) {
+                        const e = state.entities[i];
+                        if (e.scale.x < 0.99) e.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
+                        if (e.userData.type === 'creature' || e.userData.type === 'chief') {
+                            e.position.y = O_Y + 0.3 + Math.sin(t * 4 + e.userData.hopOffset) * 0.03;
+                        }
+                        if (e.userData.type === 'tree' || e.userData.type === 'bush') {
+                            e.userData.productionTimer = (e.userData.productionTimer || 0) + 0.016;
+                            if (e.userData.productionTimer > 25) {
+                                e.userData.productionTimer = 0;
+                                const foodPos = e.position.clone();
+                                foodPos.x += (Math.random() - 0.5) * 1.2;
+                                foodPos.z += (Math.random() - 0.5) * 1.2;
+                                const food = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15), this.world.getMat(state.palette.accent));
+                                food.position.set(foodPos.x, O_Y + 0.15, foodPos.z);
+                                food.scale.set(0, 0, 0);
+                                this.world.add(food);
+                                state.foods.push(food);
+                            }
+                        }
+                        if (e.userData.type === 'chief') {
+                            if (state.gameMode === 'fps') {
+                                const distToPlayer = e.position.distanceTo(state.player.pos);
+                                if (distToPlayer < 8.0) {
+                                    const dir = e.position.clone().sub(state.player.pos).normalize();
+                                    e.position.x += dir.x * e.userData.moveSpeed;
+                                    e.position.z += dir.z * e.userData.moveSpeed;
+                                    e.lookAt(new THREE.Vector3(e.position.x - dir.x, e.position.y, e.position.z - dir.z));
+                                } else {
+                                    e.lookAt(new THREE.Vector3(state.player.pos.x, e.position.y, state.player.pos.z));
+                                }
+                            } else {
+                                e.userData.fleeTimer = (e.userData.fleeTimer || 0) + 0.016;
+                                if (e.userData.fleeTimer > 3) {
+                                    e.userData.fleeTimer = 0;
+                                    e.userData.wanderDir = new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).normalize();
+                                }
+                                if (e.userData.wanderDir) {
+                                    e.position.x += e.userData.wanderDir.x * 0.01;
+                                    e.position.z += e.userData.wanderDir.z * 0.01;
+                                }
+                                const boundR = 5.0 * (this.islandGroup ? this.islandGroup.scale.x : 1);
+                                if (e.position.x ** 2 + e.position.z ** 2 > boundR ** 2) {
+                                    const a = Math.atan2(e.position.z, e.position.x);
+                                    e.position.x = Math.cos(a) * boundR * 0.9;
+                                    e.position.z = Math.sin(a) * boundR * 0.9;
+                                }
+                            }
+                        }
+                        if (e.userData.type === 'creature' && !e.userData.held) {
+                            e.userData.age = (e.userData.age || 0) + 0.016;
+                            e.userData.hunger = (e.userData.hunger || 0) + 0.016 * 0.1;
+                            let nearestFood = null, minDist = Infinity;
+                            state.foods.forEach(f => { const d = e.position.distanceTo(f.position); if (d < minDist) { minDist = d; nearestFood = f; } });
+                            if (nearestFood && minDist < 0.5) {
+                                this.audio.eat();
+                                this.world.remove(nearestFood);
+                                state.foods.splice(state.foods.indexOf(nearestFood), 1);
+                                e.userData.hunger = 0;
+                                e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
+                                for (let j = 0; j < 3; j++) this.factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
+                                if (e.userData.eatenCount >= 3 && e.userData.age > 8) {
+                                    e.userData.eatenCount = 0;
+                                    this.audio.layEgg();
+                                    const egg = this.factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);
+                                    state.entities.push(egg);
+                                    this.world.add(egg);
+                                }
+                            } else if (nearestFood && minDist < 3) {
+                                const dir = nearestFood.position.clone().sub(e.position).normalize();
+                                e.position.x += dir.x * e.userData.moveSpeed;
+                                e.position.z += dir.z * e.userData.moveSpeed;
+                                e.lookAt(new THREE.Vector3(nearestFood.position.x, e.position.y, nearestFood.position.z));
+                            } else {
+                                e.userData.cooldown = (e.userData.cooldown || 0) - 0.016;
+                                if (e.userData.cooldown <= 0) {
+                                    e.userData.cooldown = 1 + Math.random() * 2;
+                                    e.userData.wanderDir = new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).normalize();
+                                }
+                                if (e.userData.wanderDir) {
+                                    e.position.x += e.userData.wanderDir.x * e.userData.moveSpeed * 0.5;
+                                    e.position.z += e.userData.wanderDir.z * e.userData.moveSpeed * 0.5;
+                                }
+                            }
+                            const boundR = 5.0 * (this.islandGroup ? this.islandGroup.scale.x : 1);
+                            if (e.position.x ** 2 + e.position.z ** 2 > boundR ** 2) {
+                                const a = Math.atan2(e.position.z, e.position.x);
+                                e.position.x = Math.cos(a) * boundR * 0.9;
+                                e.position.z = Math.sin(a) * boundR * 0.9;
+                            }
+                            if (e.userData.hunger > 15) {
+                                if (!e.userData.bubble) {
+                                    e.userData.bubble = this.factory.createBubbleTexture('?', '#ff4444');
+                                    e.add(e.userData.bubble);
+                                    this.audio.hungry();
+                                }
+                            } else if (e.userData.bubble) { e.remove(e.userData.bubble); e.userData.bubble = null; }
+                            if (e.userData.hunger > 30) {
+                                this.audio.die();
+                                for (let j = 0; j < 20; j++) this.factory.createParticle(e.position.clone(), e.userData.color, 1.5);
+                                this.world.remove(e);
+                                state.entities.splice(i, 1);
+                                if (state.obstacles.includes(e)) state.obstacles.splice(state.obstacles.indexOf(e), 1);
+                            }
+                        }
+                        if (e.userData.type === 'egg') {
+                            e.userData.hatchTimer = (e.userData.hatchTimer || 10) - 0.016;
+                            e.rotation.z = Math.sin(t * 5) * 0.1 * (1 - e.userData.hatchTimer / 10);
+                            if (e.userData.hatchTimer <= 0) {
+                                this.audio.pop();
+                                for (let j = 0; j < 10; j++) this.factory.createParticle(e.position.clone(), e.userData.color, 1);
+                                const baby = this.factory.createCreature(state.palette, e.position.x, e.position.z, e.userData.parentDNA);
+                                baby.scale.set(0.5, 0.5, 0.5);
+                                baby.userData.targetScale = 0.7 + Math.random() * 0.3;
+                                state.entities.push(baby);
+                                this.world.add(baby);
+                                this.world.remove(e);
+                                state.entities.splice(i, 1);
+                            }
+                        }
+                    }
+
+                    state.foods.forEach(f => {
+                        if (f.scale.x < 0.99) f.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
+                        f.position.y = O_Y + 0.15 + Math.sin(t * 3 + f.position.x) * 0.05;
+                        f.rotation.y += 0.02;
+                        f.rotation.z = Math.sin(t * 2) * 0.1;
+                    });
+
+                    for (let i = state.particles.length - 1; i >= 0; i--) {
+                        const p = state.particles[i];
+                        p.position.add(p.userData.vel);
+                        p.userData.vel.y -= 0.002;
+                        p.userData.life -= 0.03;
+                        p.material.opacity = p.userData.life;
+                        if (p.userData.life <= 0) { this.world.remove(p); state.particles.splice(i, 1); }
+                    }
+
+                    for (let i = state.debris.length - 1; i >= 0; i--) {
+                        const d = state.debris[i];
+                        if (d.userData.vel) {
+                            d.position.add(d.userData.vel);
+                            d.userData.vel.y -= 0.01;
+                            if (d.userData.rotVel) {
+                                d.rotation.x += d.userData.rotVel.x;
+                                d.rotation.y += d.userData.rotVel.y;
+                                d.rotation.z += d.userData.rotVel.z;
+                            }
+                            d.scale.multiplyScalar(0.98);
+                            if (d.position.y < -20 || d.scale.x < 0.01) {
+                                this.world.remove(d);
+                                this.factory.disposeHierarchy(d);
+                                state.debris.splice(i, 1);
+                            }
+                        }
+                    }
+                }
+                this.world.render();
+            }
+        }
+
+        // ===== INITIALIZE GAME =====
+        const game = new GameEngine();
+    </script>
+</body>
+
+</html>
