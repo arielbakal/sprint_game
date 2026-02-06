@@ -57,5 +57,12 @@ export default class GameState {
         this.boatSpeed = 0;
         this.boatMaxSpeed = 0.12;
         this.boatRotation = 0;
+
+        // Boarding animation
+        this.isBoardingBoat = false;
+        this.boardingPhase = 0;       // 0=walk-to, 1=hop-up, 2=settle
+        this.boardingProgress = 0;    // 0..1 within each phase
+        this.boardingStartPos = null; // player start position
+        this.boardingTargetBoat = null;
     }
 }

@@ -258,19 +258,166 @@ export default class GameEngine {
     // --- Boat system ---
     boardBoat(boat) {
         const state = this.state;
-        state.isOnBoat = true;
-        state.activeBoat = boat;
-        state.boatSpeed = 0;
-        state.boatRotation = boat.rotation.y;
+        // Start the boarding animation instead of instantly boarding
+        state.isBoardingBoat = true;
+        state.boardingPhase = 0;
+        state.boardingProgress = 0;
+        state.boardingStartPos = state.player.pos.clone();
+        state.boardingTargetBoat = boat;
         state.player.vel.set(0, 0, 0);
         if (this.ui.boatPrompt) this.ui.boatPrompt.style.display = 'none';
         this.boatPromptVisible = false;
         this.audio.sail();
+    }
+
+    finishBoarding() {
+        const state = this.state;
+        const boat = state.boardingTargetBoat;
+        state.isBoardingBoat = false;
+        state.boardingTargetBoat = null;
+        state.isOnBoat = true;
+        state.activeBoat = boat;
+        state.boatSpeed = 0;
+        state.boatRotation = boat.rotation.y;
         this.showBoatHUD(true);
-        // Hide player model when on boat
+        // Set player to seated pose on boat
         if (this.playerController.playerGroup) {
-            this.playerController.playerGroup.visible = false;
+            this.playerController.playerGroup.visible = true;
+            this.setSeatedPose();
         }
+    }
+
+    updateBoardingAnimation(dt) {
+        const state = this.state;
+        if (!state.isBoardingBoat || !state.boardingTargetBoat) return;
+
+        const boat = state.boardingTargetBoat;
+        const player = state.player;
+        const pc = this.playerController;
+
+        // Phase speeds
+        const walkSpeed = 2.5;  // phase 0: walk to boat side
+        const hopSpeed = 2.8;   // phase 1: hop up onto deck
+        const settleSpeed = 3.0; // phase 2: settle into position
+
+        if (state.boardingPhase === 0) {
+            // --- Phase 0: Walk toward the boat edge ---
+            state.boardingProgress += dt * walkSpeed;
+
+            // Target: a point at the boat's side
+            const boatSide = boat.position.clone();
+            const sideAngle = Math.atan2(
+                state.boardingStartPos.x - boat.position.x,
+                state.boardingStartPos.z - boat.position.z
+            );
+            boatSide.x += Math.sin(sideAngle) * 2.0;
+            boatSide.z += Math.cos(sideAngle) * 2.0;
+            boatSide.y = player.pos.y;
+
+            // Lerp position
+            const t0 = Math.min(state.boardingProgress, 1);
+            const ease = t0 * (2 - t0); // ease-out
+            player.pos.lerpVectors(state.boardingStartPos, boatSide, ease);
+
+            // Face the boat
+            if (pc.modelPivot) {
+                const lookAngle = Math.atan2(
+                    boat.position.x - player.pos.x,
+                    boat.position.z - player.pos.z
+                );
+                const targetQ = new THREE.Quaternion();
+                targetQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), lookAngle);
+                pc.modelPivot.quaternion.slerp(targetQ, 0.2);
+            }
+
+            // Walk animation
+            if (pc.legL && pc.legR && pc.armL && pc.armR) {
+                const walkCycle = performance.now() * 0.012;
+                pc.legL.rotation.x = Math.sin(walkCycle) * 0.7;
+                pc.legR.rotation.x = Math.sin(walkCycle + Math.PI) * 0.7;
+                pc.armL.rotation.x = Math.sin(walkCycle + Math.PI) * 0.4;
+                pc.armR.rotation.x = Math.sin(walkCycle) * 0.4;
+            }
+
+            if (pc.playerGroup) pc.playerGroup.position.copy(player.pos);
+
+            if (state.boardingProgress >= 1) {
+                state.boardingPhase = 1;
+                state.boardingProgress = 0;
+                state._boardingHopStart = player.pos.clone();
+            }
+        } else if (state.boardingPhase === 1) {
+            // --- Phase 1: Hop up onto the boat deck ---
+            state.boardingProgress += dt * hopSpeed;
+            const t1 = Math.min(state.boardingProgress, 1);
+            const ease = t1 * t1 * (3 - 2 * t1); // smooth-step
+
+            // Arc from side to boat center, with vertical hop
+            const hopStart = state._boardingHopStart;
+            const deckPos = boat.position.clone();
+            deckPos.y = boat.position.y - 1.30; // deck height (matches seated position)
+
+            player.pos.lerpVectors(hopStart, deckPos, ease);
+            // Parabolic arc for the hop
+            const hopHeight = 1.2;
+            player.pos.y += Math.sin(t1 * Math.PI) * hopHeight;
+
+            // Tuck legs mid-jump
+            if (pc.legL && pc.legR) {
+                const tuck = Math.sin(t1 * Math.PI) * 0.8;
+                pc.legL.rotation.x = -tuck;
+                pc.legR.rotation.x = -tuck;
+            }
+            if (pc.armL && pc.armR) {
+                const reach = Math.sin(t1 * Math.PI) * 0.6;
+                pc.armL.rotation.x = -reach;
+                pc.armR.rotation.x = -reach;
+                pc.armL.rotation.z = reach * 0.5;
+                pc.armR.rotation.z = -reach * 0.5;
+            }
+
+            if (pc.playerGroup) pc.playerGroup.position.copy(player.pos);
+
+            if (state.boardingProgress >= 1) {
+                state.boardingPhase = 2;
+                state.boardingProgress = 0;
+            }
+        } else if (state.boardingPhase === 2) {
+            // --- Phase 2: Settle on deck, reset pose ---
+            state.boardingProgress += dt * settleSpeed;
+            const t2 = Math.min(state.boardingProgress, 1);
+
+            // Snap onto boat position
+            player.pos.copy(boat.position);
+            player.pos.y = boat.position.y - 1.30;
+
+            // Smoothly reset limbs to idle
+            if (pc.legL && pc.legR && pc.armL && pc.armR) {
+                pc.legL.rotation.x *= (1 - t2);
+                pc.legR.rotation.x *= (1 - t2);
+                pc.armL.rotation.x *= (1 - t2);
+                pc.armR.rotation.x *= (1 - t2);
+                pc.armL.rotation.z = (pc.armL.rotation.z || 0) * (1 - t2);
+                pc.armR.rotation.z = (pc.armR.rotation.z || 0) * (1 - t2);
+            }
+
+            if (pc.playerGroup) pc.playerGroup.position.copy(player.pos);
+
+            if (state.boardingProgress >= 1) {
+                this.finishBoarding();
+            }
+        }
+
+        // Camera follows smoothly during animation
+        const ca = player.cameraAngle;
+        ca.y = Math.max(0.1, Math.min(1.4, ca.y));
+        const camDist = 6.0;
+        const camX = player.pos.x + camDist * Math.sin(ca.x) * Math.cos(ca.y);
+        const camZ = player.pos.z + camDist * Math.cos(ca.x) * Math.cos(ca.y);
+        const camY = player.pos.y + camDist * Math.sin(ca.y) + 1.0;
+        const desiredPos = new THREE.Vector3(camX, camY, camZ);
+        this.world.camera.position.lerp(desiredPos, 0.08);
+        this.world.camera.lookAt(player.pos.x, player.pos.y + 0.5, player.pos.z);
     }
 
     disembarkBoat() {
@@ -308,10 +455,34 @@ export default class GameEngine {
         state.player.vel.set(0, 0, 0);
         this.audio.pickup();
         this.showBoatHUD(false);
-        // Show player model again
+        // Reset player pose from seated and show
         if (this.playerController.playerGroup) {
             this.playerController.playerGroup.visible = true;
+            this.resetSeatedPose();
         }
+    }
+
+    setSeatedPose() {
+        const pc = this.playerController;
+        if (!pc.modelPivot) return;
+        // Bend legs forward (sitting on deck)
+        if (pc.legL) { pc.legL.rotation.x = -Math.PI / 2; pc.legL.position.y = 0.3; }
+        if (pc.legR) { pc.legR.rotation.x = -Math.PI / 2; pc.legR.position.y = 0.3; }
+        // Arms resting on lap
+        if (pc.armL) { pc.armL.rotation.x = -0.4; pc.armL.rotation.z = 0.25; }
+        if (pc.armR) { pc.armR.rotation.x = -0.4; pc.armR.rotation.z = -0.25; }
+        // Lower the pivot so the character sits on the deck surface
+        pc.modelPivot.position.y = -0.20;
+    }
+
+    resetSeatedPose() {
+        const pc = this.playerController;
+        if (!pc.modelPivot) return;
+        if (pc.legL) { pc.legL.rotation.x = 0; pc.legL.position.y = 0.4; }
+        if (pc.legR) { pc.legR.rotation.x = 0; pc.legR.position.y = 0.4; }
+        if (pc.armL) { pc.armL.rotation.set(0, 0, 0); }
+        if (pc.armR) { pc.armR.rotation.set(0, 0, 0); }
+        pc.modelPivot.position.y = 0;
     }
 
     showBoatHUD(show) {
@@ -385,6 +556,32 @@ export default class GameEngine {
         // Position player on boat
         state.player.pos.copy(boat.position);
         state.player.pos.y += 0.6;
+
+        // Update player model: seated on boat, facing bow (-Z)
+        const pc = this.playerController;
+        if (pc.playerGroup) {
+            // Place player on the deck (deck is at y=-1.42 in boat local space)
+            pc.playerGroup.position.copy(boat.position);
+            pc.playerGroup.position.y = boat.position.y - 1.20  ;
+            // Sit slightly toward the stern so they're behind the mast
+            const bowDir = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
+            pc.playerGroup.position.x -= bowDir.x * 0.6;
+            pc.playerGroup.position.z -= bowDir.z * 0.6;
+
+            // Face the bow: player model faces +Z by default, bow is -Z, so add PI
+            if (pc.modelPivot) {
+                const targetQ = new THREE.Quaternion();
+                targetQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.boatRotation + Math.PI);
+                pc.modelPivot.quaternion.slerp(targetQ, 0.15);
+            }
+
+            // Gentle body sway with the waves
+            if (pc.armL && pc.armR) {
+                const sway = Math.sin(t * 1.5) * 0.06;
+                pc.armL.rotation.z = 0.25 + sway;
+                pc.armR.rotation.z = -0.25 - sway;
+            }
+        }
 
         // Update camera to follow boat
         const ca = state.player.cameraAngle;
@@ -553,7 +750,9 @@ export default class GameEngine {
             });
 
             // --- Player/Boat update ---
-            if (state.isOnBoat) {
+            if (state.isBoardingBoat) {
+                this.updateBoardingAnimation(dt);
+            } else if (state.isOnBoat) {
                 this.updateBoatPhysics(dt);
             } else {
                 this.playerController.update(dt, state.islands);

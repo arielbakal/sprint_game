@@ -41,7 +41,7 @@ export default class InputHandler {
                 if (state.player.cameraMode === 'first') state.player.cameraAngle.y = 0.0;
             }
             // E to board/exit boat
-            if (k === 'e' && state.phase === 'playing') {
+            if (k === 'e' && state.phase === 'playing' && !state.isBoardingBoat) {
                 if (state.isOnBoat) {
                     this.engine.disembarkBoat();
                 } else if (this.engine._nearestBoat) {
