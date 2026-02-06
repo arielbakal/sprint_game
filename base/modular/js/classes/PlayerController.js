@@ -72,7 +72,30 @@ export default class PlayerController {
         this.armR.position.set(-0.35, 0.9, 0);
         this.modelPivot.add(this.armL, this.armR);
 
+        // Hand anchor points for holding items
+        this.handAnchorL = new THREE.Group();
+        this.handAnchorL.position.set(0, -0.4, 0);
+        this.armL.add(this.handAnchorL);
+
+        this.handAnchorR = new THREE.Group();
+        this.handAnchorR.position.set(0, -0.4, 0);
+        this.armR.add(this.handAnchorR);
+
+        this.heldItem = null;
+
         this.world.add(this.playerGroup);
+    }
+
+    holdItem(item) {
+        if (this.heldItem) {
+            this.handAnchorR.remove(this.heldItem);
+        }
+        this.heldItem = item;
+        if (item) {
+            item.rotation.set(Math.PI, Math.PI, -Math.PI / 4);
+            item.position.set(0, 0, 0);
+            this.handAnchorR.add(item);
+        }
     }
 
     update(dt, islands) {

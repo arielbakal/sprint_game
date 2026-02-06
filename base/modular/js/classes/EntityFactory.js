@@ -289,6 +289,45 @@ export default class EntityFactory {
         }
     }
 
+    createAxe(palette, x, z) {
+        const g = new THREE.Group();
+
+        const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x5d4037, flatShading: true });
+        const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x78909c, flatShading: true });
+        const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xeeeeee, flatShading: true });
+
+        const handleGeo = new THREE.CylinderGeometry(0.0125, 0.015, 0.5, 6);
+        const handle = new THREE.Mesh(handleGeo, woodMaterial);
+        g.add(handle);
+
+        const headBaseGeo = new THREE.BoxGeometry(0.05, 0.075, 0.1);
+        const headBase = new THREE.Mesh(headBaseGeo, metalMaterial);
+        headBase.position.y = 0.2;
+        headBase.castShadow = true;
+        g.add(headBase);
+
+        const bladeGeo = new THREE.BoxGeometry(0.0075, 0.15, 0.125);
+        const blade = new THREE.Mesh(bladeGeo, metalMaterial);
+        blade.position.set(0, 0.2, 0.0875);
+        blade.rotation.x = Math.PI / 8;
+        blade.castShadow = true;
+        g.add(blade);
+
+        const edgeGeo = new THREE.BoxGeometry(0.0025, 0.1625, 0.0125);
+        const edge = new THREE.Mesh(edgeGeo, edgeMaterial);
+        edge.position.set(0, 0.2, 0.15);
+        edge.rotation.x = Math.PI / 8;
+        g.add(edge);
+
+        g.position.set(x, this.O_Y + 0.1, z);
+        g.rotation.z = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        g.rotation.y = Math.random() * Math.PI * 2;
+        g.scale.set(0, 0, 0);
+        g.userData = { type: 'axe', color: null };
+
+        return g;
+    }
+
     // Create island at a specific world position with given radius
     createIslandAt(palette, centerX, centerZ, radius, hasWater = false) {
         const g = new THREE.Group();

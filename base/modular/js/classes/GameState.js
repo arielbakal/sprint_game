@@ -47,6 +47,9 @@ export default class GameState {
         this.chopTimer = 0;              // time since last chop hit
         this.lastInteractTime = 0;
 
+        // Axe
+        this.heldAxe = null;             // axe entity being held
+
         // Mouse
         this.mouseX = 0;
         this.mouseY = 0;
