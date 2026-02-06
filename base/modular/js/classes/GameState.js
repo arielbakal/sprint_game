@@ -67,5 +67,14 @@ export default class GameState {
         this.boardingProgress = 0;    // 0..1 within each phase
         this.boardingStartPos = null; // player start position
         this.boardingTargetBoat = null;
+
+        // Cat boarding animation
+        this.catBoarding = false;
+        this.catBoardingPhase = 0;    // 0=run-to, 1=hop-up, 2=settle
+        this.catBoardingProgress = 0;
+        this.catBoardingStartPos = null;
+        this.catOnBoat = false;
+        this.catBoardingQueued = false;
+        this.catBoardingDelay = 0;
     }
 }

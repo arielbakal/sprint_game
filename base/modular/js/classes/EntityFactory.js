@@ -484,6 +484,144 @@ export default class EntityFactory {
         return g;
     }
 
+    createCat(x, z) {
+        const g = new THREE.Group();
+        const orange = new THREE.Color(0xE8963E);
+        const white = new THREE.Color(0xFAF0E6);
+        const darkOrange = orange.clone().multiplyScalar(0.7);
+        const pink = new THREE.Color(0xFFB6C1);
+        const eyeGreen = new THREE.Color(0x6BA54A);
+
+        // Body (elongated box, white belly implied by front being white)
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(0.45, 0.35, 0.7),
+            this.getMat(orange)
+        );
+        body.position.y = 0.35;
+        g.add(body);
+
+        // White belly patch
+        const belly = new THREE.Mesh(
+            new THREE.BoxGeometry(0.35, 0.12, 0.55),
+            this.getMat(white)
+        );
+        belly.position.set(0, 0.14, 0);
+        body.add(belly);
+
+        // Head
+        const head = new THREE.Mesh(
+            new THREE.BoxGeometry(0.38, 0.32, 0.32),
+            this.getMat(orange)
+        );
+        head.position.set(0, 0.48, -0.42);
+        g.add(head);
+
+        // White face/muzzle area
+        const muzzle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.26, 0.16, 0.1),
+            this.getMat(white)
+        );
+        muzzle.position.set(0, -0.06, -0.14);
+        head.add(muzzle);
+
+        // Nose (pink)
+        const nose = new THREE.Mesh(
+            new THREE.BoxGeometry(0.06, 0.04, 0.04),
+            this.getMat(pink)
+        );
+        nose.position.set(0, -0.01, -0.18);
+        head.add(nose);
+
+        // Eyes
+        const eyeGeo = new THREE.SphereGeometry(0.04, 6, 6);
+        const pupGeo = new THREE.SphereGeometry(0.02, 4, 4);
+        const eyeMat = this.getMat(eyeGreen);
+        const pupMat = this.getMat(0x111111);
+
+        [-1, 1].forEach(side => {
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(side * 0.1, 0.04, -0.16);
+            head.add(eye);
+            const pupil = new THREE.Mesh(pupGeo, pupMat);
+            pupil.position.set(side * 0.1, 0.04, -0.19);
+            head.add(pupil);
+        });
+
+        // Ears (triangular cones, orange)
+        [-1, 1].forEach(side => {
+            const ear = new THREE.Mesh(
+                new THREE.ConeGeometry(0.07, 0.16, 4),
+                this.getMat(orange)
+            );
+            ear.position.set(side * 0.12, 0.2, -0.02);
+            ear.rotation.z = side * 0.2;
+            head.add(ear);
+            // Inner ear (pink)
+            const innerEar = new THREE.Mesh(
+                new THREE.ConeGeometry(0.04, 0.1, 4),
+                this.getMat(pink)
+            );
+            innerEar.position.set(0, 0.01, -0.01);
+            ear.add(innerEar);
+        });
+
+        // Legs (4 white paws)
+        const legGeo = new THREE.BoxGeometry(0.1, 0.2, 0.1);
+        const legMat = this.getMat(white);
+        const legPositions = [
+            { x: -0.14, z: -0.22 },  // front-left
+            { x: 0.14, z: -0.22 },   // front-right
+            { x: -0.14, z: 0.22 },   // back-left
+            { x: 0.14, z: 0.22 }     // back-right
+        ];
+        const legs = [];
+        legPositions.forEach(lp => {
+            const leg = new THREE.Mesh(legGeo, legMat);
+            leg.position.set(lp.x, 0.1, lp.z);
+            g.add(leg);
+            legs.push(leg);
+        });
+
+        // Tail (curved, orange with white tip)
+        const tailBase = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.03, 0.04, 0.4, 4),
+            this.getMat(orange)
+        );
+        tailBase.position.set(0, 0.45, 0.4);
+        tailBase.rotation.x = 0.6;
+        g.add(tailBase);
+
+        const tailTip = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.02, 0.03, 0.2, 4),
+            this.getMat(white)
+        );
+        tailTip.position.set(0, 0.22, 0.02);
+        tailTip.rotation.x = -0.4;
+        tailBase.add(tailTip);
+
+        // White chest patch (front of body)
+        const chest = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.25, 0.08),
+            this.getMat(white)
+        );
+        chest.position.set(0, 0.02, -0.32);
+        body.add(chest);
+
+        g.position.set(x, this.O_Y, z);
+        g.userData = {
+            type: 'cat',
+            radius: 0.4,
+            legs: legs,
+            tail: tailBase,
+            moveSpeed: 0.06,
+            hopOffset: Math.random() * 100,
+            followDist: 1.8,
+            idleTimer: 0,
+            isIdle: false
+        };
+        return g;
+    }
+
     createHintIsland(palette, offsetX, scale = 0.4) {
         const g = new THREE.Group();
         g.position.x = offsetX;
