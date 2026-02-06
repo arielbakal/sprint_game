@@ -29,6 +29,7 @@ export default class GameState {
             onGround: false,
             targetRotation: 0,
             cameraAngle: { x: 0, y: 0.3 }, // x = horizontal orbit, y = vertical orbit
+            cameraMode: 'third', // 'third' or 'first'
         };
         this.inputs = { w: false, a: false, s: false, d: false, space: false };
         this.sensitivity = 0.002;

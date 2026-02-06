@@ -33,7 +33,22 @@ canvas {
 }
 
 #custom-cursor {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ffcc00;
+    background: rgba(255, 204, 0, 0.2);
+    border-radius: 50%;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 2000;
     display: none;
+    transition: transform 0.1s;
+}
+
+#custom-cursor.active {
+    transform: translate(-50%, -50%) scale(0.8);
+    background: rgba(255, 204, 0, 0.5);
 }
 
 #settings-btn {

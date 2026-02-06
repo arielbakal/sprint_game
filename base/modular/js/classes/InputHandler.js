@@ -29,9 +29,16 @@ export default class InputHandler {
                 else if (state.inventory[idx]) { state.selectedSlot = idx; sfx.select(); }
                 this.engine.updateInventory();
             }
-            // ESC to exit pointer lock
+            // ESC to exit pointer lock (browser handles this, we just update UI in pointerlockchange)
             if (k === 'escape') {
                 if (document.pointerLockElement) document.exitPointerLock();
+            }
+            // G to toggle camera mode (First/Third person)
+            if (k === 'g' && state.phase === 'playing') {
+                state.player.cameraMode = state.player.cameraMode === 'third' ? 'first' : 'third';
+                sfx.select();
+                // If switching to first person, reset vertical angle for better view
+                if (state.player.cameraMode === 'first') state.player.cameraAngle.y = 0.0;
             }
             // E to board/exit boat
             if (k === 'e' && state.phase === 'playing') {
@@ -75,6 +82,12 @@ export default class InputHandler {
                 state.player.cameraAngle.x -= e.movementX * state.sensitivity;
                 state.player.cameraAngle.y += e.movementY * state.sensitivity;
                 state.player.cameraAngle.y = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, state.player.cameraAngle.y));
+            } else {
+                // Update custom cursor position
+                if (cursor) {
+                    cursor.style.left = e.clientX + 'px';
+                    cursor.style.top = e.clientY + 'px';
+                }
             }
         });
 
@@ -96,6 +109,8 @@ export default class InputHandler {
                 cursor.style.display = 'none';
             } else {
                 cursor.style.display = 'block';
+                cursor.style.left = state.mouseX + 'px';
+                cursor.style.top = state.mouseY + 'px';
             }
         });
 
