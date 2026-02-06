@@ -305,38 +305,104 @@ export default class EntityFactory {
 
     createBoat(x, z, color) {
         const g = new THREE.Group();
-        // Hull (wider, boat-shaped)
-        const hullGeo = new THREE.BoxGeometry(3.5, 0.6, 1.8);
-        const hull = new THREE.Mesh(hullGeo, this.getMat(color));
-        hull.position.y = -1.8;
-        hull.scale.set(1, 0.7, 0.7);
+        const darkWood = color.clone().multiplyScalar(0.6);
+        const lightWood = color.clone().lerp(new THREE.Color(0xddccaa), 0.3);
+
+        // Hull bottom (tapered keel shape, length along Z)
+        const hullGeo = new THREE.BoxGeometry(1.6, 0.5, 3.8);
+        const hull = new THREE.Mesh(hullGeo, this.getMat(darkWood));
+        hull.position.y = -2.0;
+        hull.scale.set(1, 0.7, 1);
         g.add(hull);
-        // Deck
-        const deckGeo = new THREE.BoxGeometry(2.8, 0.15, 1.4);
-        const deck = new THREE.Mesh(deckGeo, this.getMat(color));
-        deck.position.y = -1.45;
+
+        // Hull upper / gunwales (wider at top)
+        const upperHullGeo = new THREE.BoxGeometry(1.9, 0.35, 3.6);
+        const upperHull = new THREE.Mesh(upperHullGeo, this.getMat(color));
+        upperHull.position.y = -1.6;
+        g.add(upperHull);
+
+        // Deck planks
+        const deckGeo = new THREE.BoxGeometry(1.5, 0.08, 3.0);
+        const deck = new THREE.Mesh(deckGeo, this.getMat(lightWood));
+        deck.position.y = -1.42;
         g.add(deck);
-        // Mast
-        const mastGeo = new THREE.CylinderGeometry(0.06, 0.08, 2.5, 6);
-        const mast = new THREE.Mesh(mastGeo, this.getMat(color.clone().multiplyScalar(0.7)));
-        mast.position.y = -0.2;
-        g.add(mast);
-        // Sail
-        const sailGeo = new THREE.PlaneGeometry(1.2, 1.8);
-        const sailColor = new THREE.Color(0xffeedd);
-        const sail = new THREE.Mesh(sailGeo, new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, flatShading: true }));
-        sail.position.set(0.65, -0.3, 0);
-        sail.rotation.y = Math.PI / 2;
-        g.add(sail);
-        // Bow (front point)
-        const bowGeo = new THREE.ConeGeometry(0.6, 1.2, 4);
+
+        // Deck plank lines (cross beams for detail)
+        for (let i = -1; i <= 1; i++) {
+            const beam = new THREE.Mesh(
+                new THREE.BoxGeometry(1.5, 0.1, 0.06),
+                this.getMat(darkWood)
+            );
+            beam.position.set(0, -1.38, i * 0.8);
+            g.add(beam);
+        }
+
+        // Bow (front = -Z direction, pointed)
+        const bowGeo = new THREE.ConeGeometry(0.65, 1.4, 4);
         const bow = new THREE.Mesh(bowGeo, this.getMat(color));
-        bow.rotation.z = Math.PI / 2;
-        bow.position.set(-2.1, -1.65, 0);
+        bow.rotation.x = -Math.PI / 2; // point along -Z
+        bow.position.set(0, -1.75, -2.4);
         g.add(bow);
 
+        // Stern (back = +Z, flat transom)
+        const sternGeo = new THREE.BoxGeometry(1.6, 0.7, 0.15);
+        const stern = new THREE.Mesh(sternGeo, this.getMat(darkWood));
+        stern.position.set(0, -1.75, 1.9);
+        g.add(stern);
+
+        // Keel (bottom ridge)
+        const keelGeo = new THREE.BoxGeometry(0.12, 0.2, 3.2);
+        const keel = new THREE.Mesh(keelGeo, this.getMat(darkWood));
+        keel.position.y = -2.35;
+        g.add(keel);
+
+        // Mast
+        const mastGeo = new THREE.CylinderGeometry(0.05, 0.07, 2.8, 6);
+        const mast = new THREE.Mesh(mastGeo, this.getMat(darkWood));
+        mast.position.set(0, -0.05, -0.4);
+        g.add(mast);
+
+        // Boom (horizontal spar)
+        const boomGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4);
+        const boom = new THREE.Mesh(boomGeo, this.getMat(darkWood));
+        boom.rotation.z = Math.PI / 2;
+        boom.position.set(0.4, -0.6, -0.4);
+        g.add(boom);
+
+        // Sail (triangular-ish, offset to one side for character)
+        const sailShape = new THREE.Shape();
+        sailShape.moveTo(0, 0);
+        sailShape.lineTo(0, 2.0);
+        sailShape.lineTo(1.3, 0);
+        sailShape.closePath();
+        const sailGeo = new THREE.ShapeGeometry(sailShape);
+        const sailColor = new THREE.Color(0xfff5e6);
+        const sail = new THREE.Mesh(sailGeo, new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, flatShading: true }));
+        sail.position.set(0.01, -1.45, -0.4);
+        sail.rotation.y = Math.PI / 2;
+        g.add(sail);
+
+        // Rudder (at stern, below waterline)
+        const rudderGeo = new THREE.BoxGeometry(0.06, 0.6, 0.35);
+        const rudder = new THREE.Mesh(rudderGeo, this.getMat(darkWood));
+        rudder.position.set(0, -2.3, 2.0);
+        g.add(rudder);
+
+        // Side rail posts (gunwale details)
+        const postPositions = [-1.0, 0, 1.0];
+        postPositions.forEach(pz => {
+            [-0.85, 0.85].forEach(px => {
+                const post = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.03, 0.03, 0.35, 4),
+                    this.getMat(darkWood)
+                );
+                post.position.set(px, -1.25, pz);
+                g.add(post);
+            });
+        });
+
         g.position.set(x, 0, z);
-        g.userData = { type: 'boat', color: color, radius: 2.0 };
+        g.userData = { type: 'boat', color: color, radius: 2.5 };
         return g;
     }
 

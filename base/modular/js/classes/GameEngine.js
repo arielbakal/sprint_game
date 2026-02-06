@@ -435,12 +435,16 @@ export default class GameEngine {
         state.activeBoat = boat;
         state.boatSpeed = 0;
         state.boatRotation = boat.rotation.y;
+        // Align camera to face the boat's forward direction so WASD feels correct
+        state.player.yaw = boat.rotation.y;
+        state.player.targetYaw = boat.rotation.y;
+        state.player.pitch = -0.15; // slight downward look to see the boat
+        state.player.targetPitch = -0.15;
         state.player.vel.set(0, 0, 0);
         state.player.canJump = false;
         this.ui.boatPrompt.style.display = 'none';
         this.boatPromptVisible = false;
-        this.audio.place();
-        // Show navigation hint
+        this.audio.sail();
         this.showBoatHUD(true);
     }
 
@@ -500,32 +504,46 @@ export default class GameEngine {
         const boat = state.activeBoat;
         if (!boat) return;
 
-        // Acceleration / deceleration
-        if (state.inputs.w) state.boatSpeed = Math.min(state.boatSpeed + 0.003, state.boatMaxSpeed);
-        else if (state.inputs.s) state.boatSpeed = Math.max(state.boatSpeed - 0.004, -state.boatMaxSpeed * 0.3);
-        else state.boatSpeed *= 0.98; // friction
+        // Steering - only effective when moving, with speed-dependent turn rate
+        const speedFactor = Math.min(Math.abs(state.boatSpeed) / state.boatMaxSpeed, 1);
+        const turnRate = 0.018 * (0.3 + speedFactor * 0.7);
+        if (state.inputs.a) state.boatRotation += turnRate;
+        if (state.inputs.d) state.boatRotation -= turnRate;
 
-        // Steering
-        if (state.inputs.a) state.boatRotation += 0.02;
-        if (state.inputs.d) state.boatRotation -= 0.02;
+        // Acceleration / deceleration with momentum
+        if (state.inputs.w) {
+            state.boatSpeed = Math.min(state.boatSpeed + 0.002, state.boatMaxSpeed);
+        } else if (state.inputs.s) {
+            state.boatSpeed = Math.max(state.boatSpeed - 0.003, -state.boatMaxSpeed * 0.25);
+        } else {
+            // Water friction - gradual slowdown
+            state.boatSpeed *= 0.985;
+            if (Math.abs(state.boatSpeed) < 0.001) state.boatSpeed = 0;
+        }
+
+        // Forward direction from boat rotation
+        const forward = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
 
         // Apply movement
-        const forward = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
         boat.position.x += forward.x * state.boatSpeed;
         boat.position.z += forward.z * state.boatSpeed;
         boat.rotation.y = state.boatRotation;
 
-        // Bobbing
+        // Ocean bobbing
         const t = performance.now() * 0.001;
-        boat.position.y = Math.sin(t * 1.5) * 0.15;
-        boat.rotation.x = Math.sin(t * 1.2) * 0.03;
-        boat.rotation.z = Math.sin(t * 0.8) * 0.02;
+        boat.position.y = Math.sin(t * 1.2) * 0.12 + Math.sin(t * 0.7) * 0.06;
 
-        // Position player on boat
+        // Pitch (nose up/down with waves) + lean into turns
+        const turnInput = (state.inputs.a ? 1 : 0) - (state.inputs.d ? 1 : 0);
+        const targetLean = turnInput * speedFactor * -0.08;
+        boat.rotation.z = boat.rotation.z * 0.9 + targetLean * 0.1 + Math.sin(t * 0.8) * 0.015;
+        boat.rotation.x = Math.sin(t * 1.0 + 0.5) * 0.025 + state.boatSpeed * 0.1;
+
+        // Position player on boat deck
         state.player.pos.copy(boat.position);
-        state.player.pos.y += 0.5;
+        state.player.pos.y += 0.6;
 
-        // Camera follows boat
+        // Camera: smooth follow with free mouse-look
         const camera = this.world.camera;
         state.player.yaw += (state.player.targetYaw - state.player.yaw) * 0.3;
         state.player.pitch += (state.player.targetPitch - state.player.pitch) * 0.3;
@@ -534,13 +552,28 @@ export default class GameEngine {
         camera.rotation.x = state.player.pitch;
         camera.position.copy(state.player.pos);
 
-        // Wake particles
-        if (Math.abs(state.boatSpeed) > 0.02 && Math.random() < 0.3) {
-            const wakePos = boat.position.clone();
-            wakePos.x -= forward.x * 2;
-            wakePos.z -= forward.z * 2;
-            wakePos.y = -1.8;
-            this.factory.createParticle(wakePos, new THREE.Color(0x88ccff), 0.8);
+        // Wake particles (more at higher speed)
+        if (Math.abs(state.boatSpeed) > 0.015) {
+            const wakeChance = Math.min(Math.abs(state.boatSpeed) / state.boatMaxSpeed, 1) * 0.5;
+            if (Math.random() < wakeChance) {
+                const wakePos = boat.position.clone();
+                wakePos.x -= forward.x * 2.2;
+                wakePos.z -= forward.z * 2.2;
+                wakePos.y = -1.9;
+                // Spread wake sideways
+                const side = new THREE.Vector3(forward.z, 0, -forward.x);
+                wakePos.x += side.x * (Math.random() - 0.5) * 1.2;
+                wakePos.z += side.z * (Math.random() - 0.5) * 1.2;
+                this.factory.createParticle(wakePos, new THREE.Color(0xaaddff), 0.7);
+            }
+            // Bow spray at high speed
+            if (Math.abs(state.boatSpeed) > state.boatMaxSpeed * 0.6 && Math.random() < 0.2) {
+                const bowPos = boat.position.clone();
+                bowPos.x += forward.x * 2.5;
+                bowPos.z += forward.z * 2.5;
+                bowPos.y = -1.5;
+                this.factory.createParticle(bowPos, new THREE.Color(0xffffff), 0.4);
+            }
         }
     }
 
