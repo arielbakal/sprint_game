@@ -48,11 +48,41 @@ export default class InputHandler {
                     this.engine.boardBoat(this.engine._nearestBoat);
                 }
             }
-            // F to pick up/drop axe
+            // F to pick up/store axe
+            // E to store/pick axe from inventory
+            if (k === 'e' && state.phase === 'playing') {
+                if (state.heldAxe) {
+                    // Store axe in inventory
+                    const stored = this.engine.addAxeToInventory();
+                    if (stored) {
+                        this.engine.audio.pickup();
+                        this.engine.playerController.holdItem(null);
+                        state.heldAxe = null;
+                    } else {
+                        this.engine.audio.pop();
+                    }
+                } else {
+                    // Pick axe from inventory
+                    const hadAxeInInventory = this.engine.hasAxeInInventory();
+                    if (hadAxeInInventory) {
+                        this.engine.pickAxeFromInventory();
+                        const newAxe = this.engine.factory.createAxe(this.engine.state.palette, state.player.pos.x, state.player.pos.z);
+                        newAxe.scale.set(1, 1, 1);
+                        state.heldAxe = newAxe;
+                        this.engine.playerController.holdItem(newAxe);
+                        this.engine.audio.pickup();
+                    } else {
+                        this.engine.audio.pop();
+                    }
+                }
+            }
+            // F to pick up/drop axe on ground (only when NOT on boat)
             if (k === 'f' && state.phase === 'playing' && !state.isOnBoat) {
                 if (state.heldAxe) {
+                    // Drop axe on ground
                     this.dropAxe();
                 } else {
+                    // Pick up axe from ground
                     this.tryPickupAxe();
                 }
             }
@@ -227,6 +257,35 @@ export default class InputHandler {
             if (idx > -1) state.entities.splice(idx, 1);
             world.remove(nearestAxe);
             // Attach to player's hand
+            state.heldAxe = nearestAxe;
+            this.engine.playerController.holdItem(nearestAxe);
+        }
+    }
+
+    tryPickupAxeFromGround() {
+        const state = this.engine.state;
+        const world = this.engine.world;
+        const sfx = this.engine.audio;
+
+        if (state.heldAxe) return;
+
+        let nearestAxe = null;
+        let nearestDist = 4;
+
+        for (const e of state.entities) {
+            if (e.userData.type !== 'axe') continue;
+            const dist = state.player.pos.distanceTo(e.position);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearestAxe = e;
+            }
+        }
+
+        if (nearestAxe) {
+            sfx.pickup();
+            const idx = state.entities.indexOf(nearestAxe);
+            if (idx > -1) state.entities.splice(idx, 1);
+            world.remove(nearestAxe);
             state.heldAxe = nearestAxe;
             this.engine.playerController.holdItem(nearestAxe);
         }
@@ -521,18 +580,25 @@ export default class InputHandler {
         if (axeHint) {
             if (!state.heldAxe) {
                 let nearAxe = false;
+                let nearAxeInInventory = this.engine.hasAxeInInventory();
                 for (const e of state.entities) {
                     if (e.userData.type !== 'axe') continue;
                     const dist = state.player.pos.distanceTo(e.position);
                     if (dist < 4) { nearAxe = true; break; }
                 }
-                axeHint.style.display = nearAxe ? 'block' : 'none';
-                if (nearAxe) {
-                    axeHint.textContent = 'Press F to pick up Axe';
+                if (nearAxeInInventory || nearAxe) {
+                    axeHint.style.display = 'block';
+                    if (nearAxeInInventory) {
+                        axeHint.textContent = 'Press E to take Axe from Inventory';
+                    } else {
+                        axeHint.textContent = 'Press F to pick up Axe';
+                    }
+                } else {
+                    axeHint.style.display = 'none';
                 }
             } else {
                 axeHint.style.display = 'block';
-                axeHint.textContent = 'Press F to drop Axe';
+                axeHint.textContent = 'F to drop / E to store Axe';
             }
         }
     }
