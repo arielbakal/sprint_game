@@ -60,6 +60,18 @@ export default class InputHandler {
                 state.player.targetPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, state.player.targetPitch));
             }
         });
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === renderer.domElement) {
+                document.getElementById('custom-cursor').style.display = 'none';
+                document.getElementById('fps-msg').style.display = 'none';
+            } else {
+                if (state.gameMode === 'fps') {
+                    document.getElementById('fps-msg').style.display = 'block';
+                    document.getElementById('custom-cursor').style.display = 'block';
+                }
+            }
+        });
+
         window.addEventListener('wheel', (e) => {
             if (state.phase !== 'playing') return;
             if (state.gameMode === 'fps') {
