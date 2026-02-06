@@ -6,7 +6,7 @@ export default class WorldManager {
     constructor(renderScale) {
         this.renderScale = renderScale;
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth * renderScale, window.innerHeight * renderScale, false);
         this.renderer.domElement.style.imageRendering = 'pixelated';

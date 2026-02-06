@@ -33,27 +33,7 @@ canvas {
 }
 
 #custom-cursor {
-    position: fixed;
-    width: 12px;
-    height: 12px;
-    background: #fff;
-    pointer-events: none;
-    z-index: 1000;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 0 2px #000, 0 0 10px 2px rgba(255, 255, 255, 0.5);
-    mix-blend-mode: difference;
     display: none;
-    transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-#custom-cursor.active {
-    transform: translate(-50%, -50%) scale(1.5);
-}
-
-@media (hover: hover) and (pointer: fine) {
-    #custom-cursor {
-        display: block;
-    }
 }
 
 #settings-btn {
@@ -407,35 +387,35 @@ input[type=range] {
 }
 
 #crosshair {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 4px;
-    height: 4px;
-    background: #fff;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    z-index: 1000;
-    box-shadow: 0 0 0 2px #000;
     display: none;
 }
 
-#fps-msg {
+/* Resource HUD */
+/* Resource HUD - Hidden as per request */
+#resource-hud {
+    display: none !important;
+}
+
+/* Chop Progress Indicator */
+#chop-indicator {
     position: absolute;
-    top: 50%;
+    bottom: 80px;
     left: 50%;
-    transform: translate(-50%, -50%);
-    color: #fff;
-    text-align: center;
-    font-size: 12px;
-    text-shadow: 2px 2px 0 #000;
-    pointer-events: none;
-    z-index: 900;
-    display: none;
-    line-height: 1.5;
-    background: rgba(0, 0, 0, 0.5);
-    padding: 20px;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 10px;
+    background: rgba(0, 0, 0, 0.6);
     border: 2px solid #fff;
+    display: none;
+    z-index: 100;
+    pointer-events: none;
+}
+
+#chop-fill {
+    height: 100%;
+    width: 0%;
+    background: #ff8800;
+    transition: width 0.15s ease;
 }
 
 .setting-row {
@@ -446,26 +426,6 @@ input[type=range] {
     font-size: 0.6rem;
     width: 100%;
     margin-top: 10px;
-}
-
-.mode-btn {
-    background: #2a2a35;
-    border: 2px solid #fff;
-    color: #fff;
-    padding: 5px 10px;
-    font-family: inherit;
-    cursor: pointer;
-    font-size: 0.5rem;
-    text-transform: uppercase;
-}
-
-.mode-btn:hover {
-    background: #444;
-}
-
-.mode-btn.active {
-    background: #44f;
-    border-color: #88f;
 }
 
 #dialog-box {
@@ -501,4 +461,95 @@ input[type=range] {
 #dialog-box button:hover {
     background: #fff;
     color: #000;
+}
+
+/* Boat & Island UI */
+#boat-prompt {
+    position: absolute;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 0.65rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 20px;
+    border: 2px solid #88ccff;
+    box-shadow: 0 0 15px rgba(136, 204, 255, 0.4);
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    animation: promptPulse 1.5s infinite;
+}
+
+@keyframes promptPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 15px rgba(136, 204, 255, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 25px rgba(136, 204, 255, 0.8);
+    }
+}
+
+#boat-nav-hint {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #88ccff;
+    font-size: 0.55rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 8px 16px;
+    border: 1px solid #88ccff;
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+}
+
+#boat-build-progress {
+    position: absolute;
+    bottom: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #ffcc44;
+    font-size: 0.6rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 16px;
+    border: 2px solid #ffcc44;
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    animation: fadeIn 0.2s ease-out;
+}
+
+#island-indicator {
+    position: absolute;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 0.7rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 24px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    animation: slideDown 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.icon-wood {
+    width: 18px;
+    height: 8px;
+    background: currentColor;
+    border: 2px solid rgba(0, 0, 0, 0.4);
+    border-radius: 2px;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
 }

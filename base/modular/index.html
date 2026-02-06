@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>Pocket Terrarium: Ecosystem</title>
+    <title>Island Survival</title>
     <script src="https://cdn.jsdelivr.net/npm/beepbox@4.2.0/global/beepbox_synth.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -13,8 +13,6 @@
     <div id="custom-cursor"></div>
     <div id="touch-reticle"></div>
     <div id="crosshair"></div>
-    <div id="fps-msg">CLICK TO CAPTURE MOUSE<br><br>WASD to Move<br>SPACE to Jump<br>CLICK to Interact<br>1-8 for
-        Inventory<br>G to Toggle Mode<br>ESC for Settings<br>M to Unlock Mouse</div>
     <div id="white-flash"></div>
 
     <div id="ui-layer">
@@ -26,27 +24,19 @@
                     <input type="range" id="vol-slider" min="0" max="100" value="50">
                 </div>
             </label>
-            <div class="setting-row">
-                <span>MODE:</span>
-                <div>
-                    <button id="mode-creator" class="mode-btn active">GOD</button>
-                    <button id="mode-fps" class="mode-btn">FPS</button>
-                </div>
-            </div>
-            <div class="setting-row">
-                <span>SENS:</span>
-                <input type="range" id="sens-slider" min="1" max="100" value="20" style="width:60px;">
-            </div>
-            <button id="grow-btn"
-                style="width:100%; margin-top:10px; background:#2a2a35; color:#fff; border:2px solid #fff; padding:5px; font-family:inherit; font-size:0.6rem; cursor:pointer;">
-                GROW TERRAIN
-            </button>
         </div>
         <div id="dialog-box">
-            <p id="dialog-text">Greetings, traveler! I am the Chief.</p>
+            <p id="dialog-text">Greetings, traveler!</p>
             <button onclick="document.getElementById('dialog-box').style.display='none';">CLOSE</button>
         </div>
-        <div id="essence-screen"></div>
+
+        <div id="resource-hud">
+            <div class="log-icon"></div>
+            <span class="log-label">x<span id="log-count">0</span></span>
+        </div>
+        <div id="chop-indicator">
+            <div id="chop-fill"></div>
+        </div>
         <div id="inventory-container">
             <div id="inventory-grid"></div>
         </div>
@@ -55,6 +45,10 @@
             <span class="text">NEW WORLD</span>
             <span class="skull">☠</span>
         </button>
+        <div id="boat-prompt">Press E to Board Boat</div>
+        <div id="boat-nav-hint">WASD to Sail &bull; E to Disembark</div>
+        <div id="boat-build-progress"></div>
+        <div id="island-indicator"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

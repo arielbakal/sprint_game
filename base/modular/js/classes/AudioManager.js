@@ -1,5 +1,5 @@
 // =====================================================
-// POCKET TERRARIUM - AUDIO MANAGER CLASS
+// AUDIO MANAGER CLASS
 // =====================================================
 
 export default class AudioManager {
@@ -35,6 +35,10 @@ export default class AudioManager {
     pickup() { this.chirp(300, 500, 0.2, 0.1); }
     place() { this.chirp(500, 300, 0.2, 0.1); }
     pop() { this.chirp(800, 1000, 0.1, 0.05); }
+    chop() { this.chirp(400, 200, 0.08, 0.12); }
+    treeFall() { this.chirp(300, 80, 0.4, 0.15); }
+    sail() { this.chirp(200, 350, 0.3, 0.08); setTimeout(() => this.chirp(350, 500, 0.2, 0.06), 200); }
+    boatBuild() { this.chirp(300, 600, 0.3, 0.1); setTimeout(() => this.chirp(600, 800, 0.15, 0.08), 200); setTimeout(() => this.chirp(800, 1000, 0.1, 0.06), 400); }
     eat() { this.chirp(400, 500, 0.08, 0.05); setTimeout(() => this.chirp(400, 500, 0.08, 0.05), 120); }
     hungry() { this.chirp(500, 400, 0.4, 0.08); setTimeout(() => this.chirp(420, 350, 0.4, 0.06), 200); }
     sing() { this.chirp(600, 800, 0.1, 0.05); setTimeout(() => this.chirp(800, 1000, 0.1, 0.05), 150); setTimeout(() => this.chirp(1000, 700, 0.2, 0.05), 300); }

@@ -1,5 +1,5 @@
 // =====================================================
-// POCKET TERRARIUM - GAME STATE CLASS
+// GAME STATE CLASS
 // =====================================================
 
 export default class GameState {
@@ -8,10 +8,7 @@ export default class GameState {
     }
 
     reset() {
-        this.gameMode = 'creator';
-        this.sensitivity = 0.04;
-        this.fov = 60;
-        this.phase = 'essence';
+        this.phase = 'loading';
         this.palette = null;
         this.worldDNA = null;
         this.inventory = new Array(8).fill(null);
@@ -20,27 +17,44 @@ export default class GameState {
         this.foods = [];
         this.particles = [];
         this.debris = [];
-        this.ambientParticles = [];
         this.obstacles = [];
-        this.interaction = { mode: 'idle', heldEntity: null, pressTime: 0, startPos: new THREE.Vector2(), isZooming: false };
-        this.mouseX = 0;
-        this.mouseY = 0;
-        this.camAngle = 0;
-        this.camRadius = 13;
-        this.zoomStart = 0;
-        this.hoveredSphere = null;
-        this.selectedEssence = null;
-        this.selectionProgress = 0;
+
         this.musicStarted = false;
+
+        // Player (third-person)
         this.player = {
             pos: new THREE.Vector3(0, 0, 0),
             vel: new THREE.Vector3(0, 0, 0),
-            speed: 0.08,
-            yaw: 0, pitch: 0,
-            targetYaw: 0, targetPitch: 0,
-            canJump: false
+            speed: 0.12,
+            onGround: false,
+            targetRotation: 0,
+            cameraAngle: { x: 0, y: 0.3 }, // x = horizontal orbit, y = vertical orbit
         };
         this.inputs = { w: false, a: false, s: false, d: false, space: false };
+        this.sensitivity = 0.002;
+
+        // Multi-island data (populated by GameEngine)
+        this.islands = [];
+
+        // Resources
+        this.resources = { logs: 0 };
+
+        // Interaction
+        this.interactionTarget = null;    // entity currently highlighted
+        this.chopProgress = 0;            // hits on current tree (0-5)
+        this.isChopping = false;          // holding click on tree
+        this.chopTimer = 0;              // time since last chop hit
         this.lastInteractTime = 0;
+
+        // Mouse
+        this.mouseX = 0;
+        this.mouseY = 0;
+
+        // Boat navigation
+        this.isOnBoat = false;
+        this.activeBoat = null;
+        this.boatSpeed = 0;
+        this.boatMaxSpeed = 0.12;
+        this.boatRotation = 0;
     }
 }
