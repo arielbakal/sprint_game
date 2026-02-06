@@ -17,6 +17,9 @@ export default class GameEngine {
         this.spheres = [];
         this.islandGroup = null;
         this.groundPlane = null;
+        this.waterMesh = null;
+        this.hintIslands = [];
+        this.logs = [];
         this.ui = {};
         this.setupUI();
         this.initSpheres();
@@ -200,6 +203,7 @@ export default class GameEngine {
             this.state.debris.push(chunk);
         });
         this.world.remove(this.islandGroup);
+        this.hintIslands.forEach(h => this.world.remove(h));
         this.audio.fadeOut();
         setTimeout(() => this.initGame(null), 800);
     }
@@ -248,11 +252,19 @@ export default class GameEngine {
         this.islandGroup = island.group;
         this.groundPlane = island.groundPlane;
 
-        // Apply scale
+        // Re-apply scale logic
         this.islandGroup.scale.set(initialScale, initialScale, initialScale);
         this.islandGroup.position.y = this.factory.O_Y * (1 - initialScale);
 
+        this.waterMesh = island.group.children.find(c => c.userData.type === 'water');
         this.world.add(this.islandGroup);
+
+        const leftHint = this.factory.createHintIsland(this.state.palette, -22, 0.35);
+        const rightHint = this.factory.createHintIsland(this.state.palette, 22, 0.35);
+        this.hintIslands = [leftHint, rightHint];
+        this.world.add(leftHint);
+        this.world.add(rightHint);
+
         this.state.player.pos = new THREE.Vector3(0, 5, 0);
 
         // Spawn more entities for the larger space

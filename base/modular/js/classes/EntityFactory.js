@@ -98,7 +98,7 @@ export default class EntityFactory {
         g.position.set(x, this.O_Y, z);
         g.rotation.y = Math.random() * Math.PI * 2;
         g.scale.set(0, 0, 0);
-        g.userData = { type: 'tree', radius: 0.6, style: dna, color: dna.color, productionTimer: Math.random() * 20 };
+        g.userData = { type: 'tree', radius: 0.6, style: dna, color: dna.trunkColor, productionTimer: Math.random() * 20 };
         this.state.obstacles.push(g);
         return g;
     }
@@ -288,5 +288,70 @@ export default class EntityFactory {
         water.userData = { type: 'water' };
         g.add(base, soil, grass, water);
         return { group: g, groundPlane: grass };
+    }
+
+    createLog(x, z, color) {
+        const g = new THREE.Group();
+        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.35, 3, 8);
+        const trunk = new THREE.Mesh(trunkGeo, this.getMat(color));
+        trunk.rotation.z = Math.PI / 2;
+        trunk.position.y = -1.7;
+        g.add(trunk);
+        g.position.set(x, 0, z);
+        g.rotation.y = Math.random() * Math.PI * 2;
+        g.userData = { type: 'log', color: color };
+        return g;
+    }
+
+    createBoat(x, z, color) {
+        const g = new THREE.Group();
+        const hullGeo = new THREE.BoxGeometry(3.5, 0.6, 1.8);
+        const hull = new THREE.Mesh(hullGeo, this.getMat(color));
+        hull.position.y = -1.8;
+        hull.scale.set(1, 0.7, 0.7);
+        g.add(hull);
+        const deckGeo = new THREE.BoxGeometry(2.8, 0.15, 1.4);
+        const deck = new THREE.Mesh(deckGeo, this.getMat(color));
+        deck.position.y = -1.45;
+        g.add(deck);
+        g.position.set(x, 0, z);
+        g.userData = { type: 'boat', color: color };
+        return g;
+    }
+
+    createHintIsland(palette, offsetX, scale = 0.4) {
+        const g = new THREE.Group();
+        g.position.x = offsetX;
+        g.position.z = 25;
+
+        const base = new THREE.Mesh(this.generateTerrain(2.8 * scale, 24, -0.25, 0.25), this.getMat(palette.baseRock));
+        base.rotation.x = -Math.PI / 2; base.position.y = -2;
+        const soil = new THREE.Mesh(this.generateTerrain(2.5 * scale, 24, -0.2, 0.2), this.getMat(palette.soil));
+        soil.rotation.x = -Math.PI / 2; soil.position.y = -1.5;
+        const grass = new THREE.Mesh(this.generateTerrain(2.3 * scale, 24, -0.15, 0.15), this.getMat(palette.groundTop));
+        grass.rotation.x = -Math.PI / 2; grass.position.y = this.O_Y * scale;
+
+        const sideGeo = new THREE.CylinderGeometry(1.8 * scale, 2.2 * scale, 3.5, 24, 2, true);
+        const sidePos = sideGeo.attributes.position;
+        for (let i = 0; i < sidePos.count; i++) {
+            const x = sidePos.getX(i);
+            const y = sidePos.getY(i);
+            const z = sidePos.getZ(i);
+            const angle = Math.atan2(z, x);
+            const wave = Math.sin(angle * 8 + y * 2) * 0.15 * scale;
+            sidePos.setX(i, x + wave);
+            sidePos.setZ(i, z + wave);
+            const py = (y + 1.75) / 3.5;
+            sidePos.setY(i, y + (Math.random() - 0.5) * 0.2 * (1 - py));
+        }
+        sideGeo.computeVertexNormals();
+        const sideMat = this.getMat(palette.baseRock);
+        sideMat.side = THREE.DoubleSide;
+        const side = new THREE.Mesh(sideGeo, sideMat);
+        side.position.y = -0.75;
+
+        g.add(base, soil, grass, side);
+        g.userData = { type: 'hintIsland' };
+        return g;
     }
 }
