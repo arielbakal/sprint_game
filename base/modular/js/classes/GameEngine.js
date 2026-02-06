@@ -271,7 +271,7 @@ export default class GameEngine {
         state.player.yaw += (state.player.targetYaw - state.player.yaw) * 0.3;
         state.player.pitch += (state.player.targetPitch - state.player.pitch) * 0.3;
         const forward = new THREE.Vector3(-Math.sin(state.player.targetYaw), 0, -Math.cos(state.player.targetYaw));
-        const right = new THREE.Vector3(forward.z, 0, -forward.x);
+        const right = new THREE.Vector3(-forward.z, 0, forward.x);
         const moveDir = new THREE.Vector3(0, 0, 0);
         if (state.inputs.w) moveDir.add(forward);
         if (state.inputs.s) moveDir.sub(forward);
