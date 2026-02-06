@@ -355,7 +355,7 @@ export default class GameEngine {
             // Arc from side to boat center, with vertical hop
             const hopStart = state._boardingHopStart;
             const deckPos = boat.position.clone();
-            deckPos.y = boat.position.y + 0.6; // deck height
+            deckPos.y = boat.position.y - 1.30; // deck height (matches seated position)
 
             player.pos.lerpVectors(hopStart, deckPos, ease);
             // Parabolic arc for the hop
@@ -389,7 +389,7 @@ export default class GameEngine {
 
             // Snap onto boat position
             player.pos.copy(boat.position);
-            player.pos.y = boat.position.y + 0.6;
+            player.pos.y = boat.position.y - 1.30;
 
             // Smoothly reset limbs to idle
             if (pc.legL && pc.legR && pc.armL && pc.armR) {
