@@ -30,8 +30,13 @@ export default class InputHandler {
                 this.engine.updateInventory();
             }
             // ESC to exit pointer lock (browser handles this, we just update UI in pointerlockchange)
-            if (k === 'escape') {
+            if (k === 'escape' || k === ' ') {
                 if (document.pointerLockElement) document.exitPointerLock();
+                const d = document.getElementById('dialog-box');
+                if (d && d.style.display === 'flex') {
+                    d.style.display = 'none';
+                    return; // Don't process other inputs if closing dialog
+                }
             }
             // G to toggle camera mode (First/Third person)
             if (k === 'g' && state.phase === 'playing') {
@@ -48,6 +53,7 @@ export default class InputHandler {
                     this.engine.boardBoat(this.engine._nearestBoat);
                 }
             }
+<<<<<<< HEAD
             // F to pick up/store axe
             // E to store/pick axe from inventory
             if (k === 'e' && state.phase === 'playing') {
@@ -84,6 +90,16 @@ export default class InputHandler {
                 } else {
                     // Pick up axe from ground
                     this.tryPickupAxe();
+=======
+            // F to pick up/drop tools (Axe / Pickaxe)
+            if (k === 'f' && state.phase === 'playing' && !state.isOnBoat) {
+                if (state.heldAxe) {
+                    this.dropTool('axe');
+                } else if (state.heldPickaxe) {
+                    this.dropTool('pickaxe');
+                } else {
+                    this.tryPickupTool();
+>>>>>>> origin/felipe-1
                 }
             }
         });
@@ -105,6 +121,10 @@ export default class InputHandler {
         // Request pointer lock on click
         renderer.domElement.addEventListener('click', () => {
             if (state.phase === 'playing' && !document.pointerLockElement) {
+                // Don't lock if clicking on UI/Dialog
+                const d = document.getElementById('dialog-box');
+                if (d && d.style.display === 'flex') return;
+                
                 renderer.domElement.requestPointerLock();
             }
         });
@@ -152,27 +172,43 @@ export default class InputHandler {
             }
         });
 
-        // Left click: start chopping if interacting with tree, OR place/pickup items
+        // Left click: start chopping/mining or interaction
         renderer.domElement.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
             if (state.phase !== 'playing') return;
             if (!document.pointerLockElement) return;
-            if (state.isOnBoat) return; // No interaction while sailing
+            if (state.isOnBoat) return; 
 
+<<<<<<< HEAD
             // Start chopping if interactionTarget is a choppable tree AND player has axe
             if (state.interactionTarget && state.interactionTarget.userData.choppable && state.heldAxe) {
+=======
+            // Chopping
+            if (state.heldAxe && state.interactionTarget && state.interactionTarget.userData.choppable) {
+>>>>>>> origin/felipe-1
                 state.isChopping = true;
                 state.chopTimer = 0;
                 return;
             }
 
-            // Otherwise, try to interact with nearby entities
+            // Mining
+            if (state.heldPickaxe && state.interactionTarget) {
+                const type = state.interactionTarget.userData.type;
+                if (type === 'rock' || type === 'gold_rock') {
+                    state.isMining = true;
+                    state.mineTimer = 0;
+                    return;
+                }
+            }
+
+            // Otherwise, interact/pickup
             this.handleInteraction();
         });
 
         renderer.domElement.addEventListener('mouseup', (e) => {
             if (e.button !== 0) return;
             state.isChopping = false;
+            state.isMining = false;
         });
     }
 
@@ -187,11 +223,8 @@ export default class InputHandler {
 
         const playerPos = state.player.pos;
 
-        // If holding the axe, drop it
-        if (state.heldAxe) {
-            this.dropAxe();
-            return;
-        }
+        // If holding a tool, drop it? No, F drops tools. Left click uses them or interacts.
+        // Actually, let's allow dropping if not targeting anything? No, stick to F for drop.
 
         // If holding an item in inventory, try to place it
         if (state.selectedSlot !== null && state.inventory[state.selectedSlot]) {
@@ -203,62 +236,65 @@ export default class InputHandler {
         this.handlePickup();
     }
 
-    dropAxe() {
+    dropTool(type) {
         const state = this.engine.state;
         const world = this.engine.world;
         const sfx = this.engine.audio;
 
-        if (!state.heldAxe) return;
+        let tool = null;
+        if (type === 'axe') tool = state.heldAxe;
+        if (type === 'pickaxe') tool = state.heldPickaxe;
 
-        // Detach from player hand
+        if (!tool) return;
+
+        // Detach
         this.engine.playerController.holdItem(null);
+        if (type === 'axe') state.heldAxe = null;
+        if (type === 'pickaxe') state.heldPickaxe = null;
 
         // Re-attach to world
-        const axe = state.heldAxe;
-        state.heldAxe = null;
+        tool.position.copy(state.player.pos);
+        tool.position.y = this.engine.factory.O_Y + 0.1;
+        tool.rotation.y = Math.random() * Math.PI * 2;
+        
+        // Ensure scale is reset (holdItem modifies it? no, but just in case)
+        tool.scale.set(1, 1, 1);
 
-        // Position at player's feet
-        axe.position.copy(state.player.pos);
-        axe.position.y = this.engine.factory.O_Y + 0.1;
-
-        // Add random rotation
-        axe.rotation.y = Math.random() * Math.PI * 2;
-
-        world.add(axe);
-        state.entities.push(axe);
-
+        world.add(tool);
+        state.entities.push(tool);
         sfx.pickup();
     }
 
-    tryPickupAxe() {
+    tryPickupTool() {
         const state = this.engine.state;
         const world = this.engine.world;
         const sfx = this.engine.audio;
 
-        if (state.heldAxe) return;
-
-        // Find nearest axe
-        let nearestAxe = null;
+        // Find nearest tool
+        let nearest = null;
         let nearestDist = 4;
 
         for (const e of state.entities) {
-            if (e.userData.type !== 'axe') continue;
+            if (e.userData.type !== 'axe' && e.userData.type !== 'pickaxe') continue;
             const dist = state.player.pos.distanceTo(e.position);
             if (dist < nearestDist) {
                 nearestDist = dist;
-                nearestAxe = e;
+                nearest = e;
             }
         }
 
-        if (nearestAxe) {
+        if (nearest) {
             sfx.pickup();
-            // Remove from world entities
-            const idx = state.entities.indexOf(nearestAxe);
+            // Remove from world
+            const idx = state.entities.indexOf(nearest);
             if (idx > -1) state.entities.splice(idx, 1);
-            world.remove(nearestAxe);
-            // Attach to player's hand
-            state.heldAxe = nearestAxe;
-            this.engine.playerController.holdItem(nearestAxe);
+            world.remove(nearest);
+
+            // Attach
+            if (nearest.userData.type === 'axe') state.heldAxe = nearest;
+            if (nearest.userData.type === 'pickaxe') state.heldPickaxe = nearest;
+            
+            this.engine.playerController.holdItem(nearest);
         }
     }
 
@@ -379,6 +415,17 @@ export default class InputHandler {
                 // Open Chat
                 this.engine.chatManager.openChat(root);
                 sfx.sing();
+                return;
+            }
+
+            if (root.userData.type === 'golem') {
+                document.exitPointerLock();
+                const d = document.getElementById('dialog-box');
+                if (d) {
+                    d.style.display = 'flex';
+                    document.getElementById('dialog-text').innerHTML = "STONE GOLEM:<br>" + (root.userData.dialog || "...");
+                }
+                sfx.sing(); // reuse sing or pick another sound
                 return;
             }
 
