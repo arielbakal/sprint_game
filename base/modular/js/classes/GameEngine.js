@@ -280,9 +280,10 @@ export default class GameEngine {
         state.boatSpeed = 0;
         state.boatRotation = boat.rotation.y;
         this.showBoatHUD(true);
-        // Hide player model when on boat
+        // Set player to seated pose on boat
         if (this.playerController.playerGroup) {
-            this.playerController.playerGroup.visible = false;
+            this.playerController.playerGroup.visible = true;
+            this.setSeatedPose();
         }
     }
 
@@ -454,10 +455,34 @@ export default class GameEngine {
         state.player.vel.set(0, 0, 0);
         this.audio.pickup();
         this.showBoatHUD(false);
-        // Show player model again
+        // Reset player pose from seated and show
         if (this.playerController.playerGroup) {
             this.playerController.playerGroup.visible = true;
+            this.resetSeatedPose();
         }
+    }
+
+    setSeatedPose() {
+        const pc = this.playerController;
+        if (!pc.modelPivot) return;
+        // Bend legs forward (sitting)
+        if (pc.legL) { pc.legL.rotation.x = -Math.PI / 2; pc.legL.position.y = 0.35; }
+        if (pc.legR) { pc.legR.rotation.x = -Math.PI / 2; pc.legR.position.y = 0.35; }
+        // Arms resting on lap
+        if (pc.armL) { pc.armL.rotation.x = -0.4; pc.armL.rotation.z = 0.25; }
+        if (pc.armR) { pc.armR.rotation.x = -0.4; pc.armR.rotation.z = -0.25; }
+        // Lower the model so seated height looks right
+        pc.modelPivot.position.y = -0.15;
+    }
+
+    resetSeatedPose() {
+        const pc = this.playerController;
+        if (!pc.modelPivot) return;
+        if (pc.legL) { pc.legL.rotation.x = 0; pc.legL.position.y = 0.4; }
+        if (pc.legR) { pc.legR.rotation.x = 0; pc.legR.position.y = 0.4; }
+        if (pc.armL) { pc.armL.rotation.set(0, 0, 0); }
+        if (pc.armR) { pc.armR.rotation.set(0, 0, 0); }
+        pc.modelPivot.position.y = 0;
     }
 
     showBoatHUD(show) {
@@ -531,6 +556,27 @@ export default class GameEngine {
         // Position player on boat
         state.player.pos.copy(boat.position);
         state.player.pos.y += 0.6;
+
+        // Update player model: seated on boat, facing boat's forward direction
+        const pc = this.playerController;
+        if (pc.playerGroup) {
+            pc.playerGroup.position.copy(boat.position);
+            pc.playerGroup.position.y = boat.position.y + 0.15;
+
+            // Face boat's forward direction
+            if (pc.modelPivot) {
+                const targetQ = new THREE.Quaternion();
+                targetQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.boatRotation);
+                pc.modelPivot.quaternion.slerp(targetQ, 0.15);
+            }
+
+            // Gentle body sway with the waves
+            if (pc.armL && pc.armR) {
+                const sway = Math.sin(t * 1.5) * 0.06;
+                pc.armL.rotation.z = 0.25 + sway;
+                pc.armR.rotation.z = -0.25 - sway;
+            }
+        }
 
         // Update camera to follow boat
         const ca = state.player.cameraAngle;
