@@ -90,11 +90,12 @@ export default class PlayerController {
         const camRight = new THREE.Vector3();
         camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
 
+        // Corrected movement logic relative to camera
         const moveDir = new THREE.Vector3(0, 0, 0);
         if (state.inputs.w) moveDir.add(camDir);
         if (state.inputs.s) moveDir.sub(camDir);
-        if (state.inputs.a) moveDir.sub(camRight);
-        if (state.inputs.d) moveDir.add(camRight);
+        if (state.inputs.a) moveDir.sub(camRight); // A moves Left (subtract Right)
+        if (state.inputs.d) moveDir.add(camRight); // D moves Right (add Right)
         const isMoving = moveDir.lengthSq() > 0;
 
         if (isMoving) {
@@ -110,32 +111,55 @@ export default class PlayerController {
         // Gravity
         player.vel.y -= 0.015;
 
-        // Apply velocity
-        player.pos.add(player.vel);
+        // Apply velocity (Temporarily)
+        const nextPos = player.pos.clone().add(player.vel);
 
-        // --- Multi-island ground collision ---
+        // --- Multi-island ground & boundary collision ---
         let onAnyIsland = false;
+        let activeIsland = null;
+
+        // First find which island we are most likely on or over
         for (const island of islands) {
-            const dx = player.pos.x - island.center.x;
-            const dz = player.pos.z - island.center.z;
+            const dx = nextPos.x - island.center.x;
+            const dz = nextPos.z - island.center.z;
             const distSq = dx * dx + dz * dz;
-            const r = island.radius;
-            if (distSq < r * r) {
-                const floorY = island.floorY;
-                if (player.pos.y < floorY) {
-                    player.pos.y = floorY;
-                    player.vel.y = 0;
-                    player.onGround = true;
-                    onAnyIsland = true;
-                }
+            // Check broadly if we are within this island's influence (radius + small buffer)
+            if (distSq < (island.radius * 1.5) ** 2) {
+                activeIsland = island;
                 break;
             }
         }
-        if (!onAnyIsland && player.pos.y < -15) {
-            // Death plane — respawn on first island
-            player.pos.set(islands[0].center.x, islands[0].floorY + 3, islands[0].center.z);
+
+        if (activeIsland) {
+            const dx = nextPos.x - activeIsland.center.x;
+            const dz = nextPos.z - activeIsland.center.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+
+            // 1. Boundary Check: Prevent walking off
+            if (dist > activeIsland.radius - 0.5) {
+                const angle = Math.atan2(dz, dx);
+                nextPos.x = activeIsland.center.x + Math.cos(angle) * (activeIsland.radius - 0.5);
+                nextPos.z = activeIsland.center.z + Math.sin(angle) * (activeIsland.radius - 0.5);
+                player.vel.x = 0;
+                player.vel.z = 0;
+            }
+
+            // 2. Floor collision
+            if (nextPos.y < activeIsland.floorY) {
+                nextPos.y = activeIsland.floorY;
+                player.vel.y = 0;
+                player.onGround = true;
+                onAnyIsland = true;
+            }
+        } else if (nextPos.y < -15) {
+            // Fallback: only if somehow forced off-island (e.g. initial spawn bug), respawn
+            nextPos.set(islands[0].center.x, islands[0].floorY + 3, islands[0].center.z);
             player.vel.set(0, 0, 0);
+            onAnyIsland = true; // technically on safe ground now
         }
+
+        // Apply validated position
+        player.pos.copy(nextPos);
 
         // Jump
         if (player.onGround && state.inputs.space) {
@@ -180,6 +204,9 @@ export default class PlayerController {
         if (!this.playerGroup) return;
         const player = this.state.player;
         const ca = player.cameraAngle;
+
+        // Clamp vertical angle to avoid top-down issues (0.1 to ~1.4 radians)
+        ca.y = Math.max(0.1, Math.min(1.4, ca.y));
 
         const dist = 5.0;
         const camX = player.pos.x + dist * Math.sin(ca.x) * Math.cos(ca.y);

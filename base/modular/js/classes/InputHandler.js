@@ -28,6 +28,9 @@ export default class InputHandler {
                 else if (state.inventory[idx]) { state.selectedSlot = idx; sfx.select(); }
                 this.engine.updateInventory();
             }
+            if (k === 'escape') {
+                if (document.pointerLockElement) document.exitPointerLock();
+            }
         });
         document.addEventListener('keyup', (e) => {
             const k = e.key.toLowerCase();

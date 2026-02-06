@@ -104,11 +104,7 @@ export default class GameEngine {
         });
     }
 
-    updateResourceHud() {
-        if (this.ui.logCount) {
-            this.ui.logCount.textContent = this.state.resources.logs;
-        }
-    }
+
 
     resetWorld() {
         if (this.state.phase !== 'playing') return;
@@ -247,8 +243,6 @@ export default class GameEngine {
             this.audio.startMusic(this.state.worldDNA, this.ui.volSlider, this.ui.volIcon, this.ui.settingsBtn, this.ui.settingsPopup, this.audio);
             this.state.musicStarted = true;
         }
-
-        this.updateResourceHud();
     }
 
     // --- Chopping system ---
@@ -342,12 +336,14 @@ export default class GameEngine {
             const dist = Math.sqrt(dx * dx + dz * dz);
             if (dist < pickupRange && e.scale.x > 0.5) { // Wait for spawn-in animation
                 if (e.userData.type === 'log') {
-                    state.resources.logs++;
-                    this.audio.pickup();
-                    for (let j = 0; j < 8; j++) this.factory.createParticle(e.position.clone(), e.userData.color, 0.8);
-                    this.world.remove(e);
-                    state.entities.splice(i, 1);
-                    this.updateResourceHud();
+                    // Try adding to inventory first
+                    const added = this.addToInventory('log', e.userData.color, null);
+                    if (added) {
+                        this.audio.pickup();
+                        for (let j = 0; j < 8; j++) this.factory.createParticle(e.position.clone(), e.userData.color, 0.8);
+                        this.world.remove(e);
+                        state.entities.splice(i, 1);
+                    }
                 }
             }
         }
