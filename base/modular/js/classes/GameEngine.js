@@ -244,6 +244,12 @@ export default class GameEngine {
         this.state.resources.logs = 0;
         this.playerController.createModel(this.state.palette);
 
+        // Spawn companion cat near player
+        this.playerCat = this.factory.createCat(1.5, 1.5);
+        this.playerCat.scale.set(0.3, 0.3, 0.3);
+        this.state.entities.push(this.playerCat);
+        this.world.add(this.playerCat);
+
         // Set camera initial position behind player
         this.world.camera.position.set(0, O_Y + 5, 6);
         this.world.camera.fov = 60;
@@ -268,6 +274,14 @@ export default class GameEngine {
         if (this.ui.boatPrompt) this.ui.boatPrompt.style.display = 'none';
         this.boatPromptVisible = false;
         this.audio.sail();
+
+        // Start cat boarding with 1-second delay
+        if (this.playerCat) {
+            state.catOnBoat = false;
+            state.catBoardingDelay = 1.0;
+            state.catBoardingQueued = true;
+            state.catBoardingStartPos = this.playerCat.position.clone();
+        }
     }
 
     finishBoarding() {
@@ -438,11 +452,11 @@ export default class GameEngine {
 
         if (nearestIsland && nearestDist < nearestIsland.radius + 10) {
             // Place player on the island edge nearest to boat
-            const angle = Math.atan2(boatPos.z - nearestIsland.center.z, boatPos.x - nearestIsland.center.x);
+            var disembarkAngle = Math.atan2(boatPos.z - nearestIsland.center.z, boatPos.x - nearestIsland.center.x);
             state.player.pos.set(
-                nearestIsland.center.x + Math.cos(angle) * (nearestIsland.radius * 0.8),
+                nearestIsland.center.x + Math.cos(disembarkAngle) * (nearestIsland.radius * 0.8),
                 nearestIsland.floorY + 1,
-                nearestIsland.center.z + Math.sin(angle) * (nearestIsland.radius * 0.8)
+                nearestIsland.center.z + Math.sin(disembarkAngle) * (nearestIsland.radius * 0.8)
             );
         } else {
             // Too far from any island
@@ -459,6 +473,20 @@ export default class GameEngine {
         if (this.playerController.playerGroup) {
             this.playerController.playerGroup.visible = true;
             this.resetSeatedPose();
+        }
+
+        // Disembark cat: place near player on island
+        if (this.playerCat) {
+            state.catOnBoat = false;
+            state.catBoarding = false;
+            state.catBoardingQueued = false;
+            const cat = this.playerCat;
+            const catAngle = disembarkAngle + 0.3;
+            cat.position.set(
+                nearestIsland.center.x + Math.cos(catAngle) * (nearestIsland.radius * 0.75),
+                this.O_Y,
+                nearestIsland.center.z + Math.sin(catAngle) * (nearestIsland.radius * 0.75)
+            );
         }
     }
 
@@ -483,6 +511,126 @@ export default class GameEngine {
         if (pc.armL) { pc.armL.rotation.set(0, 0, 0); }
         if (pc.armR) { pc.armR.rotation.set(0, 0, 0); }
         pc.modelPivot.position.y = 0;
+    }
+
+    updateCatBoardingAnimation(dt) {
+        const state = this.state;
+        const cat = this.playerCat;
+        if (!cat || !state.catBoarding) return;
+        const boat = state.boardingTargetBoat || state.activeBoat;
+        if (!boat) return;
+
+        const catData = cat.userData;
+        const t = performance.now() * 0.001;
+
+        // Same phase speeds as player
+        const walkSpeed = 2.5;
+        const hopSpeed = 2.8;
+        const settleSpeed = 3.0;
+
+        // Cat's final deck position: behind the player (toward stern)
+        const bowDir = new THREE.Vector3(-Math.sin(state.boatRotation || boat.rotation.y), 0, -Math.cos(state.boatRotation || boat.rotation.y));
+        const catDeckTarget = boat.position.clone();
+        catDeckTarget.x -= bowDir.x * 1.2;
+        catDeckTarget.z -= bowDir.z * 1.2;
+        catDeckTarget.y = boat.position.y - 1.30;
+
+        if (state.catBoardingPhase === 0) {
+            // --- Phase 0: Walk toward the boat edge (same as player) ---
+            state.catBoardingProgress += dt * walkSpeed;
+
+            const sideAngle = Math.atan2(
+                state.catBoardingStartPos.x - boat.position.x,
+                state.catBoardingStartPos.z - boat.position.z
+            );
+            const boatSide = boat.position.clone();
+            boatSide.x += Math.sin(sideAngle) * 2.0;
+            boatSide.z += Math.cos(sideAngle) * 2.0;
+            boatSide.y = this.O_Y;
+
+            const t0 = Math.min(state.catBoardingProgress, 1);
+            const ease = t0 * (2 - t0); // ease-out (same as player)
+            cat.position.lerpVectors(state.catBoardingStartPos, boatSide, ease);
+
+            // Face the boat (same as player)
+            const lookAngle = Math.atan2(
+                boat.position.x - cat.position.x,
+                boat.position.z - cat.position.z
+            );
+            cat.rotation.y = lookAngle;
+
+            // Walk animation (leg movement)
+            if (catData.legs) {
+                const walkCycle = t * 10;
+                catData.legs[0].position.y = 0.1 + Math.sin(walkCycle) * 0.06;
+                catData.legs[1].position.y = 0.1 + Math.sin(walkCycle + Math.PI) * 0.06;
+                catData.legs[2].position.y = 0.1 + Math.sin(walkCycle + Math.PI) * 0.06;
+                catData.legs[3].position.y = 0.1 + Math.sin(walkCycle) * 0.06;
+            }
+
+            if (state.catBoardingProgress >= 1) {
+                state.catBoardingPhase = 1;
+                state.catBoardingProgress = 0;
+                state._catHopStart = cat.position.clone();
+            }
+        } else if (state.catBoardingPhase === 1) {
+            // --- Phase 1: Hop up onto the boat deck (same as player) ---
+            state.catBoardingProgress += dt * hopSpeed;
+            const t1 = Math.min(state.catBoardingProgress, 1);
+            const ease = t1 * t1 * (3 - 2 * t1); // smooth-step (same as player)
+
+            cat.position.lerpVectors(state._catHopStart, catDeckTarget, ease);
+            // Parabolic arc (same height as player)
+            const hopHeight = 1.2;
+            cat.position.y += Math.sin(t1 * Math.PI) * hopHeight;
+
+            // Tuck legs mid-jump
+            if (catData.legs) {
+                const tuck = Math.sin(t1 * Math.PI) * 0.08;
+                catData.legs.forEach(leg => {
+                    leg.position.y = 0.1 + tuck;
+                });
+            }
+
+            // Face the boat during hop
+            cat.rotation.y = Math.atan2(
+                boat.position.x - cat.position.x,
+                boat.position.z - cat.position.z
+            );
+
+            if (state.catBoardingProgress >= 1) {
+                state.catBoardingPhase = 2;
+                state.catBoardingProgress = 0;
+            }
+        } else if (state.catBoardingPhase === 2) {
+            // --- Phase 2: Settle on deck (same as player) ---
+            state.catBoardingProgress += dt * settleSpeed;
+            const t2 = Math.min(state.catBoardingProgress, 1);
+
+            cat.position.copy(catDeckTarget);
+
+            // Face the bow: cat model faces -Z, bow is -Z in boat space
+            const bowAngle = state.boatRotation || boat.rotation.y;
+            cat.rotation.y += (bowAngle - cat.rotation.y) * 0.15;
+
+            // Reset legs to standing/sitting
+            if (catData.legs) {
+                catData.legs.forEach(leg => {
+                    leg.position.y += (0.1 - leg.position.y) * 0.15;
+                });
+            }
+
+            if (state.catBoardingProgress >= 1) {
+                state.catBoarding = false;
+                state.catOnBoat = true;
+            }
+        }
+
+        // Tail sway during boarding
+        if (catData.tail) {
+            catData.tail.rotation.z = Math.sin(t * 3) * 0.4;
+            catData.tail.rotation.x = 0.6 + Math.sin(t * 2) * 0.2;
+        }
     }
 
     showBoatHUD(show) {
@@ -580,6 +728,31 @@ export default class GameEngine {
                 const sway = Math.sin(t * 1.5) * 0.06;
                 pc.armL.rotation.z = 0.25 + sway;
                 pc.armR.rotation.z = -0.25 - sway;
+            }
+        }
+
+        // Position cat on boat (seated near the bow)
+        if (this.playerCat && state.catOnBoat) {
+            const cat = this.playerCat;
+            const catData = cat.userData;
+            const bowDir = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
+            cat.position.copy(boat.position);
+            cat.position.y = boat.position.y - 1.30;
+            // Offset behind the player toward stern
+            cat.position.x -= bowDir.x * 1.2;
+            cat.position.z -= bowDir.z * 1.2;
+            // Face the bow (cat model faces -Z, bow direction is bowDir)
+            cat.rotation.y = state.boatRotation;
+            // Tail sway on boat
+            if (catData.tail) {
+                catData.tail.rotation.z = Math.sin(t * 2.0) * 0.2;
+                catData.tail.rotation.x = 0.6 + Math.sin(t * 1.2) * 0.1;
+            }
+            // Legs tucked under (sitting)
+            if (catData.legs) {
+                catData.legs.forEach(leg => {
+                    leg.position.y += (0.08 - leg.position.y) * 0.1;
+                });
             }
         }
 
@@ -752,9 +925,26 @@ export default class GameEngine {
             // --- Player/Boat update ---
             if (state.isBoardingBoat) {
                 this.updateBoardingAnimation(dt);
-            } else if (state.isOnBoat) {
+            }
+
+            // Cat boarding delay countdown
+            if (state.catBoardingQueued) {
+                state.catBoardingDelay -= dt;
+                if (state.catBoardingDelay <= 0) {
+                    state.catBoardingQueued = false;
+                    state.catBoarding = true;
+                    state.catBoardingPhase = 0;
+                    state.catBoardingProgress = 0;
+                }
+            }
+
+            if (state.catBoarding) {
+                this.updateCatBoardingAnimation(dt);
+            }
+
+            if (state.isOnBoat) {
                 this.updateBoatPhysics(dt);
-            } else {
+            } else if (!state.isBoardingBoat) {
                 this.playerController.update(dt, state.islands);
                 this.playerController.updateCamera(camera);
                 this.input.updateInteraction();
@@ -862,6 +1052,130 @@ export default class GameEngine {
                         this.world.add(baby);
                         this.world.remove(e);
                         state.entities.splice(i, 1);
+                    }
+                }
+            }
+
+            // Cat follow-player AI
+            if (this.playerCat) {
+                const cat = this.playerCat;
+                const catData = cat.userData;
+                const playerPos = state.player.pos;
+                const dx = playerPos.x - cat.position.x;
+                const dz = playerPos.z - cat.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+
+                // Find which island the cat is on
+                let catIsland = null;
+                for (const island of state.islands) {
+                    const ix = cat.position.x - island.center.x;
+                    const iz = cat.position.z - island.center.z;
+                    if (ix * ix + iz * iz < (island.radius * 0.95) * (island.radius * 0.95)) {
+                        catIsland = island;
+                        break;
+                    }
+                }
+                if (!catIsland) catIsland = state.islands[0]; // fallback to island 1
+
+                // Check if player is on the same island
+                const playerOnCatIsland = (() => {
+                    const px = playerPos.x - catIsland.center.x;
+                    const pz = playerPos.z - catIsland.center.z;
+                    return px * px + pz * pz < catIsland.radius * catIsland.radius;
+                })();
+
+                // If cat is on the boat or currently boarding, skip ground AI
+                if (state.catOnBoat || state.catBoarding) {
+                    // Cat is handled by updateBoatPhysics / updateCatBoardingAnimation
+                } else if (state.catBoardingQueued) {
+                    // Cat runs toward the boat during the delay
+                    const boat = state.boardingTargetBoat || state.activeBoat;
+                    if (boat) {
+                        const bx = boat.position.x - cat.position.x;
+                        const bz = boat.position.z - cat.position.z;
+                        const bDist = Math.sqrt(bx * bx + bz * bz);
+                        if (bDist > 1.5) {
+                            const speed = catData.moveSpeed * 2.0;
+                            cat.position.x += (bx / bDist) * speed;
+                            cat.position.z += (bz / bDist) * speed;
+                            cat.rotation.y = Math.atan2(bx / bDist, bz / bDist) + Math.PI;
+                            // Run animation
+                            if (catData.legs) {
+                                const walkCycle = t * 10;
+                                catData.legs[0].position.y = 0.1 + Math.sin(walkCycle) * 0.06;
+                                catData.legs[1].position.y = 0.1 + Math.sin(walkCycle + Math.PI) * 0.06;
+                                catData.legs[2].position.y = 0.1 + Math.sin(walkCycle + Math.PI) * 0.06;
+                                catData.legs[3].position.y = 0.1 + Math.sin(walkCycle) * 0.06;
+                            }
+                        }
+                    }
+                } else if (state.isOnBoat || !playerOnCatIsland) {
+                    catData.isIdle = true;
+                    // Face player direction
+                    if (dist > 0.3) {
+                        const targetRot = Math.atan2(dx, dz) + Math.PI;
+                        cat.rotation.y += (targetRot - cat.rotation.y) * 0.05;
+                    }
+                    if (catData.legs) {
+                        catData.legs.forEach(leg => {
+                            leg.position.y += (0.1 - leg.position.y) * 0.1;
+                        });
+                    }
+                } else if (dist > catData.followDist) {
+                    // Move toward player
+                    catData.isIdle = false;
+                    const speed = dist > 5 ? catData.moveSpeed * 2.5 : catData.moveSpeed;
+                    const nx = dx / dist;
+                    const nz = dz / dist;
+                    cat.position.x += nx * speed;
+                    cat.position.z += nz * speed;
+                    // Face direction of movement
+                    cat.rotation.y = Math.atan2(nx, nz) + Math.PI;
+
+                    // Leg walk animation
+                    if (catData.legs) {
+                        const walkCycle = t * 8;
+                        catData.legs[0].position.y = 0.1 + Math.sin(walkCycle) * 0.05;
+                        catData.legs[1].position.y = 0.1 + Math.sin(walkCycle + Math.PI) * 0.05;
+                        catData.legs[2].position.y = 0.1 + Math.sin(walkCycle + Math.PI) * 0.05;
+                        catData.legs[3].position.y = 0.1 + Math.sin(walkCycle) * 0.05;
+                    }
+                } else {
+                    catData.isIdle = true;
+                    // Face player when idle
+                    if (dist > 0.3) {
+                        const targetRot = Math.atan2(dx, dz) + Math.PI;
+                        cat.rotation.y += (targetRot - cat.rotation.y) * 0.05;
+                    }
+                    // Reset legs to standing
+                    if (catData.legs) {
+                        catData.legs.forEach(leg => {
+                            leg.position.y += (0.1 - leg.position.y) * 0.1;
+                        });
+                    }
+                }
+
+                // Tail sway (always, unless on boat)
+                if (catData.tail && !state.catOnBoat) {
+                    catData.tail.rotation.z = Math.sin(t * 2.5) * 0.3;
+                    catData.tail.rotation.x = 0.6 + Math.sin(t * 1.5) * 0.15;
+                }
+
+                // Gentle body bob (only on ground)
+                if (!state.catOnBoat && !state.catBoarding) {
+                    cat.position.y = O_Y + Math.sin(t * 3 + catData.hopOffset) * 0.015;
+                }
+
+                // Clamp cat to its current island (only when on ground, not boarding)
+                if (!state.catOnBoat && !state.catBoarding && !state.catBoardingQueued) {
+                    const rx = cat.position.x - catIsland.center.x;
+                    const rz = cat.position.z - catIsland.center.z;
+                    const r2 = rx * rx + rz * rz;
+                    const maxR = catIsland.radius * 0.8;
+                    if (r2 > maxR * maxR) {
+                        const a = Math.atan2(rz, rx);
+                        cat.position.x = catIsland.center.x + Math.cos(a) * maxR;
+                        cat.position.z = catIsland.center.z + Math.sin(a) * maxR;
                     }
                 }
             }
