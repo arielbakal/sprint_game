@@ -165,10 +165,10 @@ export default class EntityFactory {
         const legs = [createLeg(-0.8, 0.5), createLeg(0.8, 0.5), createLeg(-0.8, -0.5), createLeg(0.8, -0.5)];
 
         g.position.set(x, this.O_Y + 2.2, z);
-        g.userData = { 
-            type: 'golem', 
-            radius: 2.5, 
-            lArm, rArm, legs, 
+        g.userData = {
+            type: 'golem',
+            radius: 2.5,
+            lArm, rArm, legs,
             interactive: true,
             dialog: "need. soul. soul. in. big. green. roof."
         };
@@ -179,7 +179,7 @@ export default class EntityFactory {
     createMountain(p, x, z, scale = 1.0) {
         const g = new THREE.Group();
         const stoneMat = this.getMat(p.baseRock.clone().lerp(new THREE.Color(0x888888), 0.5));
-        
+
         // Main peak - thicker by increasing base radius
         const peakGeo = new THREE.ConeGeometry(10 * scale, 12 * scale, 6);
         const peak = new THREE.Mesh(peakGeo, stoneMat);
@@ -223,7 +223,7 @@ export default class EntityFactory {
         for (let i = 0; i < 5; i++) {
             const oreGeo = new THREE.BoxGeometry(0.2 * scale, 0.2 * scale, 0.2 * scale);
             const ore = new THREE.Mesh(oreGeo, goldMat);
-            
+
             const phi = Math.random() * Math.PI * 2;
             const theta = Math.random() * Math.PI;
             const r = 0.7 * scale;
@@ -497,18 +497,18 @@ export default class EntityFactory {
         tipL.rotation.z = Math.PI / 2 + 0.3;
         tipL.position.x = -0.15;
         tipL.position.y = 0.16;
-        
+
         const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.15, 4), metalMaterial);
         tipR.rotation.z = -Math.PI / 2 - 0.3;
         tipR.position.x = 0.15;
         tipR.position.y = 0.16;
-        
+
         g.add(head, tipL, tipR);
 
         g.position.set(x, this.O_Y + 0.1, z);
         g.rotation.z = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         g.rotation.y = Math.random() * Math.PI * 2;
-        g.scale.set(0, 0, 0);
+        g.scale.set(1, 1, 1);
         g.userData = { type: 'pickaxe', color: null };
 
         return g;

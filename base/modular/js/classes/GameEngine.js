@@ -13,7 +13,6 @@ import ChatManager from './ChatManager.js';
 export default class GameEngine {
     constructor() {
         this.audio = new AudioManager();
-        this.chatManager = new ChatManager(this); // Initialize before listeners
         this.state = new GameState();
         this.world = new WorldManager(0.5);
         this.factory = new EntityFactory(this.world, this.state);
@@ -27,6 +26,7 @@ export default class GameEngine {
         this._nearestBoat = null;
         this.ui = {};
         this.setupUI();
+        this.chatManager = new ChatManager(this); // Initialize AFTER setupUI
         this.input = new InputHandler(this);
         this.setupButtons();
         this.initGame(null);

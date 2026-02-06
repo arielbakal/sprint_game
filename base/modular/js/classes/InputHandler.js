@@ -53,8 +53,6 @@ export default class InputHandler {
                     this.engine.boardBoat(this.engine._nearestBoat);
                 }
             }
-<<<<<<< HEAD
-            // F to pick up/store axe
             // E to store/pick axe from inventory
             if (k === 'e' && state.phase === 'playing') {
                 if (state.heldAxe) {
@@ -82,16 +80,7 @@ export default class InputHandler {
                     }
                 }
             }
-            // F to pick up/drop axe on ground (only when NOT on boat)
-            if (k === 'f' && state.phase === 'playing' && !state.isOnBoat) {
-                if (state.heldAxe) {
-                    // Drop axe on ground
-                    this.dropAxe();
-                } else {
-                    // Pick up axe from ground
-                    this.tryPickupAxe();
-=======
-            // F to pick up/drop tools (Axe / Pickaxe)
+            // F to pick up/drop tools (Axe / Pickaxe) on the ground
             if (k === 'f' && state.phase === 'playing' && !state.isOnBoat) {
                 if (state.heldAxe) {
                     this.dropTool('axe');
@@ -99,7 +88,6 @@ export default class InputHandler {
                     this.dropTool('pickaxe');
                 } else {
                     this.tryPickupTool();
->>>>>>> origin/felipe-1
                 }
             }
         });
@@ -124,7 +112,7 @@ export default class InputHandler {
                 // Don't lock if clicking on UI/Dialog
                 const d = document.getElementById('dialog-box');
                 if (d && d.style.display === 'flex') return;
-                
+
                 renderer.domElement.requestPointerLock();
             }
         });
@@ -177,15 +165,10 @@ export default class InputHandler {
             if (e.button !== 0) return;
             if (state.phase !== 'playing') return;
             if (!document.pointerLockElement) return;
-            if (state.isOnBoat) return; 
+            if (state.isOnBoat) return;
 
-<<<<<<< HEAD
             // Start chopping if interactionTarget is a choppable tree AND player has axe
             if (state.interactionTarget && state.interactionTarget.userData.choppable && state.heldAxe) {
-=======
-            // Chopping
-            if (state.heldAxe && state.interactionTarget && state.interactionTarget.userData.choppable) {
->>>>>>> origin/felipe-1
                 state.isChopping = true;
                 state.chopTimer = 0;
                 return;
@@ -256,7 +239,7 @@ export default class InputHandler {
         tool.position.copy(state.player.pos);
         tool.position.y = this.engine.factory.O_Y + 0.1;
         tool.rotation.y = Math.random() * Math.PI * 2;
-        
+
         // Ensure scale is reset (holdItem modifies it? no, but just in case)
         tool.scale.set(1, 1, 1);
 
@@ -293,7 +276,7 @@ export default class InputHandler {
             // Attach
             if (nearest.userData.type === 'axe') state.heldAxe = nearest;
             if (nearest.userData.type === 'pickaxe') state.heldPickaxe = nearest;
-            
+
             this.engine.playerController.holdItem(nearest);
         }
     }
