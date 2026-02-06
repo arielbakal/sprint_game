@@ -322,6 +322,17 @@ export default class InputHandler {
                 return;
             }
 
+            if (root.userData.type === 'golem') {
+                document.exitPointerLock();
+                const d = document.getElementById('dialog-box');
+                if (d) {
+                    d.style.display = 'flex';
+                    document.getElementById('dialog-text').innerHTML = "STONE GOLEM:<br>" + (root.userData.dialog || "...");
+                }
+                sfx.sing(); // reuse sing or pick another sound
+                return;
+            }
+
             if (root.userData.type === 'boat') {
                 // Boats are boarded with E key, not picked up
                 return;

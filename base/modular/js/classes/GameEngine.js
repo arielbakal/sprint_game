@@ -177,7 +177,8 @@ export default class GameEngine {
         this.state.islands.push({
             center: new THREE.Vector3(0, 0, 0),
             radius: island1.radius,
-            floorY: O_Y + 0.05
+            floorY: O_Y + 0.05,
+            name: "STARTING SHORE"
         });
         // Get water mesh reference for boat placement
         this.waterMesh = island1.group.children.find(c => c.userData.type === 'water');
@@ -226,7 +227,8 @@ export default class GameEngine {
         this.state.islands.push({
             center: new THREE.Vector3(80, 0, 0),
             radius: island2.radius,
-            floorY: O_Y + 0.05
+            floorY: O_Y + 0.05,
+            name: "FLORA HAVEN"
         });
         // Vegetation on island 2
         for (let i = 0; i < 6; i++) { const p = rndPolar(80, 0, 2.0, 11.0); const e = this.factory.createTree(palette2, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
@@ -243,6 +245,44 @@ export default class GameEngine {
             this.state.entities.push(c);
             this.world.add(c);
         }
+
+        // --- Island 3: The Ancient Island (Bigger, Mountain, Golem) ---
+        const palette3 = this.factory.generatePalette('blue');
+        const island3 = this.factory.createIslandAt(palette3, 0, 110, 28, false);
+        this.world.add(island3.group);
+        this.islandGroups.push(island3);
+        this.groundPlanes.push(island3.groundPlane);
+        this.state.islands.push({
+            center: new THREE.Vector3(0, 0, 110),
+            radius: island3.radius,
+            floorY: O_Y + 0.05,
+            name: "ANCIENT PEAKS"
+        });
+
+        // Mountain in the center
+        const mountain = this.factory.createMountain(palette3, 0, 110, 1.5);
+        this.world.add(mountain);
+        this.state.entities.push(mountain);
+
+        // Stone Golem near the mountain
+        const golem = this.factory.createStoneGolem(palette3, 0, 118);
+        this.world.add(golem);
+        this.state.entities.push(golem);
+
+        // Bigger rocks on island 3
+        for (let i = 0; i < 8; i++) {
+            const p = rndPolar(0, 110, 8.0, 22.0);
+            const rock = this.factory.createRock(palette3, p.x, p.z);
+            rock.scale.set(3, 3, 3); // BIG ROCKS
+            this.state.entities.push(rock);
+            this.world.add(rock);
+            this.state.obstacles.push(rock);
+        }
+
+        // Other vegetation for island 3
+        for (let i = 0; i < 10; i++) { const p = rndPolar(0, 110, 10.0, 24.0); const e = this.factory.createTree(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 40; i++) { const p = rndPolar(0, 110, 5.0, 26.0); const e = this.factory.createGrass(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        for (let i = 0; i < 12; i++) { const p = rndPolar(0, 110, 6.0, 22.0); const e = this.factory.createFlower(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
 
         // --- Spawn player on island 1 ---
         this.state.player.pos.set(0, O_Y + 2, 0);
@@ -730,6 +770,39 @@ export default class GameEngine {
         this._nearestBoat = nearBoat;
     }
 
+    updateIslandIndicator() {
+        const state = this.state;
+        const playerPos = state.isOnBoat ? state.activeBoat.position : state.player.pos;
+        let currentIsland = null;
+
+        for (const island of state.islands) {
+            const dx = playerPos.x - island.center.x;
+            const dz = playerPos.z - island.center.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < island.radius + 5) {
+                currentIsland = island;
+                break;
+            }
+        }
+
+        if (currentIsland) {
+            if (state.lastIslandName !== currentIsland.name) {
+                state.lastIslandName = currentIsland.name;
+                if (this.ui.islandIndicator) {
+                    this.ui.islandIndicator.textContent = currentIsland.name;
+                    this.ui.islandIndicator.style.display = 'block';
+                    // Hide after a few seconds
+                    if (this.islandIndicatorTimeout) clearTimeout(this.islandIndicatorTimeout);
+                    this.islandIndicatorTimeout = setTimeout(() => {
+                        this.ui.islandIndicator.style.display = 'none';
+                    }, 4000);
+                }
+            }
+        } else {
+            state.lastIslandName = null;
+        }
+    }
+
     animate(t) {
         requestAnimationFrame(this.animate);
         t *= 0.001;
@@ -771,10 +844,31 @@ export default class GameEngine {
                 this.updateBoatProximity();
             }
 
+            this.updateIslandIndicator();
+
             // --- Entity updates ---
             for (let i = state.entities.length - 1; i >= 0; i--) {
                 const e = state.entities[i];
                 if (e.scale.x < 0.99) e.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
+
+                // Golem Animation
+                if (e.userData.type === 'golem') {
+                    const time = t * 2;
+                    e.position.y = this.factory.O_Y + 2.2 + Math.sin(time) * 0.1;
+                    if (e.userData.lArm) e.userData.lArm.rotation.x = Math.sin(time) * 0.15;
+                    if (e.userData.rArm) e.userData.rArm.rotation.x = Math.cos(time) * 0.15;
+                    if (e.userData.legs) {
+                        e.userData.legs.forEach((leg, idx) => {
+                            leg.scale.y = 1 + Math.sin(time + idx) * 0.05;
+                        });
+                    }
+                    // Look at player if near
+                    if (state.player.pos.distanceTo(e.position) < 15) {
+                        const targetPos = state.player.pos.clone();
+                        targetPos.y = e.position.y;
+                        e.lookAt(targetPos);
+                    }
+                }
 
                 if (e.userData.type === 'creature' || e.userData.type === 'chief') {
                     e.position.y = O_Y + 0.3 + Math.sin(t * 4 + (e.userData.hopOffset || 0)) * 0.03;

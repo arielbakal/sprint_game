@@ -36,6 +36,7 @@ export default class GameState {
 
         // Multi-island data (populated by GameEngine)
         this.islands = [];
+        this.lastIslandName = null;
 
         // Resources
         this.resources = { logs: 0 };
