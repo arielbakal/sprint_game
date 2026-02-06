@@ -34,7 +34,7 @@ export default class InputHandler {
                 if (document.pointerLockElement) document.exitPointerLock();
             }
             // E to board/exit boat
-            if (k === 'e' && state.phase === 'playing') {
+            if (k === 'e' && state.phase === 'playing' && !state.isBoardingBoat) {
                 if (state.isOnBoat) {
                     this.engine.disembarkBoat();
                 } else if (this.engine._nearestBoat) {
