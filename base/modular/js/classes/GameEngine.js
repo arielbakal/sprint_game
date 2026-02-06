@@ -465,14 +465,14 @@ export default class GameEngine {
     setSeatedPose() {
         const pc = this.playerController;
         if (!pc.modelPivot) return;
-        // Bend legs forward (sitting)
-        if (pc.legL) { pc.legL.rotation.x = -Math.PI / 2; pc.legL.position.y = 0.35; }
-        if (pc.legR) { pc.legR.rotation.x = -Math.PI / 2; pc.legR.position.y = 0.35; }
+        // Bend legs forward (sitting on deck)
+        if (pc.legL) { pc.legL.rotation.x = -Math.PI / 2; pc.legL.position.y = 0.3; }
+        if (pc.legR) { pc.legR.rotation.x = -Math.PI / 2; pc.legR.position.y = 0.3; }
         // Arms resting on lap
         if (pc.armL) { pc.armL.rotation.x = -0.4; pc.armL.rotation.z = 0.25; }
         if (pc.armR) { pc.armR.rotation.x = -0.4; pc.armR.rotation.z = -0.25; }
-        // Lower the model so seated height looks right
-        pc.modelPivot.position.y = -0.15;
+        // Lower the pivot so the character sits on the deck surface
+        pc.modelPivot.position.y = -0.20;
     }
 
     resetSeatedPose() {
@@ -557,16 +557,21 @@ export default class GameEngine {
         state.player.pos.copy(boat.position);
         state.player.pos.y += 0.6;
 
-        // Update player model: seated on boat, facing boat's forward direction
+        // Update player model: seated on boat, facing bow (-Z)
         const pc = this.playerController;
         if (pc.playerGroup) {
+            // Place player on the deck (deck is at y=-1.42 in boat local space)
             pc.playerGroup.position.copy(boat.position);
-            pc.playerGroup.position.y = boat.position.y + 0.15;
+            pc.playerGroup.position.y = boat.position.y - 1.20  ;
+            // Sit slightly toward the stern so they're behind the mast
+            const bowDir = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
+            pc.playerGroup.position.x -= bowDir.x * 0.6;
+            pc.playerGroup.position.z -= bowDir.z * 0.6;
 
-            // Face boat's forward direction
+            // Face the bow: player model faces +Z by default, bow is -Z, so add PI
             if (pc.modelPivot) {
                 const targetQ = new THREE.Quaternion();
-                targetQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.boatRotation);
+                targetQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.boatRotation + Math.PI);
                 pc.modelPivot.quaternion.slerp(targetQ, 0.15);
             }
 
