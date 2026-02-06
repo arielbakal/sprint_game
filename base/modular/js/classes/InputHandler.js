@@ -29,6 +29,11 @@ export default class InputHandler {
                 this.engine.updateInventory();
             }
             if (k === 'm' && state.gameMode === 'fps') document.exitPointerLock();
+            if (k === 'g' && state.phase === 'playing') {
+                const nextMode = state.gameMode === 'creator' ? 'fps' : 'creator';
+                this.engine.switchGameMode(nextMode);
+                sfx.select();
+            }
         });
         document.addEventListener('keyup', (e) => {
             const k = e.key.toLowerCase();
