@@ -327,4 +327,157 @@ export default class EntityFactory {
     createIsland(palette) {
         return this.createIslandAt(palette, 0, 0, 7, true);
     }
+
+    createLog(color, x, z) {
+        const g = new THREE.Group();
+        const logColor = color instanceof THREE.Color ? color : new THREE.Color(0x8B4513);
+        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.35, 3, 8);
+        const trunk = new THREE.Mesh(trunkGeo, this.getMat(logColor));
+        trunk.rotation.z = Math.PI / 2;
+        trunk.position.y = -1.7;
+        g.add(trunk);
+        g.position.set(x, 0, z);
+        g.rotation.y = Math.random() * Math.PI * 2;
+        g.userData = { type: 'log', color: logColor, autoPickup: true };
+        return g;
+    }
+
+    createBoat(x, z, color) {
+        const g = new THREE.Group();
+        const darkWood = color.clone().multiplyScalar(0.6);
+        const lightWood = color.clone().lerp(new THREE.Color(0xddccaa), 0.3);
+
+        // Hull bottom (tapered keel shape, length along Z)
+        const hullGeo = new THREE.BoxGeometry(1.6, 0.5, 3.8);
+        const hull = new THREE.Mesh(hullGeo, this.getMat(darkWood));
+        hull.position.y = -2.0;
+        hull.scale.set(1, 0.7, 1);
+        g.add(hull);
+
+        // Hull upper / gunwales (wider at top)
+        const upperHullGeo = new THREE.BoxGeometry(1.9, 0.35, 3.6);
+        const upperHull = new THREE.Mesh(upperHullGeo, this.getMat(color));
+        upperHull.position.y = -1.6;
+        g.add(upperHull);
+
+        // Deck planks
+        const deckGeo = new THREE.BoxGeometry(1.5, 0.08, 3.0);
+        const deck = new THREE.Mesh(deckGeo, this.getMat(lightWood));
+        deck.position.y = -1.42;
+        g.add(deck);
+
+        // Deck plank lines (cross beams for detail)
+        for (let i = -1; i <= 1; i++) {
+            const beam = new THREE.Mesh(
+                new THREE.BoxGeometry(1.5, 0.1, 0.06),
+                this.getMat(darkWood)
+            );
+            beam.position.set(0, -1.38, i * 0.8);
+            g.add(beam);
+        }
+
+        // Bow (front = -Z direction, pointed)
+        const bowGeo = new THREE.ConeGeometry(0.65, 1.4, 4);
+        const bow = new THREE.Mesh(bowGeo, this.getMat(color));
+        bow.rotation.x = -Math.PI / 2; // point along -Z
+        bow.position.set(0, -1.75, -2.4);
+        g.add(bow);
+
+        // Stern (back = +Z, flat transom)
+        const sternGeo = new THREE.BoxGeometry(1.6, 0.7, 0.15);
+        const stern = new THREE.Mesh(sternGeo, this.getMat(darkWood));
+        stern.position.set(0, -1.75, 1.9);
+        g.add(stern);
+
+        // Keel (bottom ridge)
+        const keelGeo = new THREE.BoxGeometry(0.12, 0.2, 3.2);
+        const keel = new THREE.Mesh(keelGeo, this.getMat(darkWood));
+        keel.position.y = -2.35;
+        g.add(keel);
+
+        // Mast
+        const mastGeo = new THREE.CylinderGeometry(0.05, 0.07, 2.8, 6);
+        const mast = new THREE.Mesh(mastGeo, this.getMat(darkWood));
+        mast.position.set(0, -0.05, -0.4);
+        g.add(mast);
+
+        // Boom (horizontal spar)
+        const boomGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4);
+        const boom = new THREE.Mesh(boomGeo, this.getMat(darkWood));
+        boom.rotation.z = Math.PI / 2;
+        boom.position.set(0.4, -0.6, -0.4);
+        g.add(boom);
+
+        // Sail (triangular-ish, offset to one side for character)
+        const sailShape = new THREE.Shape();
+        sailShape.moveTo(0, 0);
+        sailShape.lineTo(0, 2.0);
+        sailShape.lineTo(1.3, 0);
+        sailShape.closePath();
+        const sailGeo = new THREE.ShapeGeometry(sailShape);
+        const sailColor = new THREE.Color(0xfff5e6);
+        const sail = new THREE.Mesh(sailGeo, new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, flatShading: true }));
+        sail.position.set(0.01, -0.85, -0.4);
+        sail.rotation.y = Math.PI / 2;
+        g.add(sail);
+
+        // Rudder (at stern, below waterline)
+        const rudderGeo = new THREE.BoxGeometry(0.06, 0.6, 0.35);
+        const rudder = new THREE.Mesh(rudderGeo, this.getMat(darkWood));
+        rudder.position.set(0, -2.3, 2.0);
+        g.add(rudder);
+
+        // Side rail posts (gunwale details)
+        const postPositions = [-1.0, 0, 1.0];
+        postPositions.forEach(pz => {
+            [-0.85, 0.85].forEach(px => {
+                const post = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.03, 0.03, 0.35, 4),
+                    this.getMat(darkWood)
+                );
+                post.position.set(px, -1.25, pz);
+                g.add(post);
+            });
+        });
+
+        g.position.set(x, 0, z);
+        g.userData = { type: 'boat', color: color, radius: 2.5 };
+        return g;
+    }
+
+    createHintIsland(palette, offsetX, scale = 0.4) {
+        const g = new THREE.Group();
+        g.position.x = offsetX;
+        g.position.z = 25;
+
+        const base = new THREE.Mesh(this.generateTerrain(2.8 * scale, 24, -0.25, 0.25), this.getMat(palette.baseRock));
+        base.rotation.x = -Math.PI / 2; base.position.y = -2;
+        const soil = new THREE.Mesh(this.generateTerrain(2.5 * scale, 24, -0.2, 0.2), this.getMat(palette.soil));
+        soil.rotation.x = -Math.PI / 2; soil.position.y = -1.5;
+        const grass = new THREE.Mesh(this.generateTerrain(2.3 * scale, 24, -0.15, 0.15), this.getMat(palette.groundTop));
+        grass.rotation.x = -Math.PI / 2; grass.position.y = this.O_Y * scale;
+
+        const sideGeo = new THREE.CylinderGeometry(1.8 * scale, 2.2 * scale, 3.5, 24, 2, true);
+        const sidePos = sideGeo.attributes.position;
+        for (let i = 0; i < sidePos.count; i++) {
+            const x = sidePos.getX(i);
+            const y = sidePos.getY(i);
+            const z = sidePos.getZ(i);
+            const angle = Math.atan2(z, x);
+            const wave = Math.sin(angle * 8 + y * 2) * 0.15 * scale;
+            sidePos.setX(i, x + wave);
+            sidePos.setZ(i, z + wave);
+            const py = (y + 1.75) / 3.5;
+            sidePos.setY(i, y + (Math.random() - 0.5) * 0.2 * (1 - py));
+        }
+        sideGeo.computeVertexNormals();
+        const sideMat = this.getMat(palette.baseRock);
+        sideMat.side = THREE.DoubleSide;
+        const side = new THREE.Mesh(sideGeo, sideMat);
+        side.position.y = -0.75;
+
+        g.add(base, soil, grass, side);
+        g.userData = { type: 'hintIsland' };
+        return g;
+    }
 }

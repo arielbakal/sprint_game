@@ -19,6 +19,10 @@ export default class GameEngine {
         this.spheres = [];
         this.islandGroups = [];   // Array of island group objects
         this.groundPlanes = [];   // Ground meshes for raycasting
+        this.waterMesh = null;    // Reference to main water mesh
+        this.logs = [];           // Logs placed on water
+        this.boatPromptVisible = false;
+        this._nearestBoat = null;
         this.ui = {};
         this.setupUI();
         this.input = new InputHandler(this);
@@ -43,6 +47,9 @@ export default class GameEngine {
         this.ui.settingsPopup = document.getElementById('settings-popup');
         this.ui.chopIndicator = document.getElementById('chop-indicator');
         this.ui.chopFill = document.getElementById('chop-fill');
+        this.ui.boatPrompt = document.getElementById('boat-prompt');
+        this.ui.boatBuildProgress = document.getElementById('boat-build-progress');
+        this.ui.islandIndicator = document.getElementById('island-indicator');
         for (let i = 0; i < 8; i++) {
             const div = document.createElement('div');
             div.className = 'slot';
@@ -93,6 +100,7 @@ export default class GameEngine {
                 d.className = `icon-${it.type}`;
                 if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
                 if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
+                if (it.type === 'wood' || it.type === 'log') d.style.background = d.style.color;
                 el.appendChild(d);
                 if (it.count > 1) {
                     const countEl = document.createElement('span');
@@ -103,8 +111,6 @@ export default class GameEngine {
             }
         });
     }
-
-
 
     resetWorld() {
         if (this.state.phase !== 'playing') return;
@@ -144,6 +150,9 @@ export default class GameEngine {
         this.islandGroups = [];
         this.groundPlanes = [];
         this.state.islands = [];
+        this.logs = [];
+        this.state.isOnBoat = false;
+        this.state.activeBoat = null;
         this.playerController.remove();
         this.audio.fadeOut();
         setTimeout(() => this.initGame(null), 800);
@@ -155,7 +164,6 @@ export default class GameEngine {
         this.state.worldDNA = this.factory.generateWorldDNA();
         this.world.scene.background = this.state.palette.background;
         this.ui.invContainer.style.display = 'flex';
-        if (this.ui.resourceHud) this.ui.resourceHud.style.display = 'flex';
 
         const O_Y = this.factory.O_Y;
 
@@ -169,6 +177,8 @@ export default class GameEngine {
             radius: island1.radius,
             floorY: O_Y + 0.05
         });
+        // Get water mesh reference for boat placement
+        this.waterMesh = island1.group.children.find(c => c.userData.type === 'water');
 
         // Helper: random polar position within a radius band
         const rndPolar = (cx, cz, minR = 1.0, maxR = 9.0) => {
@@ -245,17 +255,167 @@ export default class GameEngine {
         }
     }
 
+    // --- Boat system ---
+    boardBoat(boat) {
+        const state = this.state;
+        state.isOnBoat = true;
+        state.activeBoat = boat;
+        state.boatSpeed = 0;
+        state.boatRotation = boat.rotation.y;
+        state.player.vel.set(0, 0, 0);
+        if (this.ui.boatPrompt) this.ui.boatPrompt.style.display = 'none';
+        this.boatPromptVisible = false;
+        this.audio.sail();
+        this.showBoatHUD(true);
+        // Hide player model when on boat
+        if (this.playerController.playerGroup) {
+            this.playerController.playerGroup.visible = false;
+        }
+    }
+
+    disembarkBoat() {
+        const state = this.state;
+        if (!state.activeBoat) return;
+        const boatPos = state.activeBoat.position;
+
+        // Find nearest island to disembark
+        let nearestIsland = null;
+        let nearestDist = Infinity;
+        for (const island of state.islands) {
+            const dist = Math.sqrt((boatPos.x - island.center.x) ** 2 + (boatPos.z - island.center.z) ** 2);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearestIsland = island;
+            }
+        }
+
+        if (nearestIsland && nearestDist < nearestIsland.radius + 10) {
+            // Place player on the island edge nearest to boat
+            const angle = Math.atan2(boatPos.z - nearestIsland.center.z, boatPos.x - nearestIsland.center.x);
+            state.player.pos.set(
+                nearestIsland.center.x + Math.cos(angle) * (nearestIsland.radius * 0.8),
+                nearestIsland.floorY + 1,
+                nearestIsland.center.z + Math.sin(angle) * (nearestIsland.radius * 0.8)
+            );
+        } else {
+            // Too far from any island
+            this.audio.pop();
+            return;
+        }
+
+        state.isOnBoat = false;
+        state.boatSpeed = 0;
+        state.player.vel.set(0, 0, 0);
+        this.audio.pickup();
+        this.showBoatHUD(false);
+        // Show player model again
+        if (this.playerController.playerGroup) {
+            this.playerController.playerGroup.visible = true;
+        }
+    }
+
+    showBoatHUD(show) {
+        const hint = document.getElementById('boat-nav-hint');
+        if (hint) hint.style.display = show ? 'block' : 'none';
+    }
+
+    updateBoatPhysics(dt) {
+        const state = this.state;
+        const boat = state.activeBoat;
+        if (!boat) return;
+
+        // Steering
+        const speedFactor = Math.min(Math.abs(state.boatSpeed) / state.boatMaxSpeed, 1);
+        const turnRate = 0.02 * (0.3 + speedFactor * 0.7);
+        if (state.inputs.a) state.boatRotation += turnRate;
+        if (state.inputs.d) state.boatRotation -= turnRate;
+
+        // Acceleration
+        if (state.inputs.w) {
+            state.boatSpeed = Math.min(state.boatSpeed + 0.003, state.boatMaxSpeed);
+        } else if (state.inputs.s) {
+            state.boatSpeed = Math.max(state.boatSpeed - 0.004, -state.boatMaxSpeed * 0.3);
+        } else {
+            state.boatSpeed *= 0.985;
+            if (Math.abs(state.boatSpeed) < 0.001) state.boatSpeed = 0;
+        }
+
+        // Forward direction
+        const forward = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
+
+        // New position
+        const newX = boat.position.x + forward.x * state.boatSpeed;
+        const newZ = boat.position.z + forward.z * state.boatSpeed;
+
+        // Island collision
+        const boatCollisionR = 3.0;
+        let blocked = false;
+        for (const island of state.islands) {
+            const dx = newX - island.center.x;
+            const dz = newZ - island.center.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            const minDist = island.radius + boatCollisionR;
+            if (dist < minDist) {
+                const angle = Math.atan2(dz, dx);
+                boat.position.x = island.center.x + Math.cos(angle) * minDist;
+                boat.position.z = island.center.z + Math.sin(angle) * minDist;
+                if (Math.abs(state.boatSpeed) > 0.02) this.audio.pop();
+                state.boatSpeed *= -0.15;
+                blocked = true;
+                break;
+            }
+        }
+
+        if (!blocked) {
+            boat.position.x = newX;
+            boat.position.z = newZ;
+        }
+        boat.rotation.y = state.boatRotation;
+
+        // Ocean bobbing
+        const t = performance.now() * 0.001;
+        boat.position.y = Math.sin(t * 1.2) * 0.12 + Math.sin(t * 0.7) * 0.06;
+
+        // Lean into turns
+        const turnInput = (state.inputs.a ? 1 : 0) - (state.inputs.d ? 1 : 0);
+        const targetLean = turnInput * speedFactor * -0.08;
+        boat.rotation.z = boat.rotation.z * 0.9 + targetLean * 0.1;
+        boat.rotation.x = Math.sin(t * 1.0 + 0.5) * 0.025 + state.boatSpeed * 0.1;
+
+        // Position player on boat
+        state.player.pos.copy(boat.position);
+        state.player.pos.y += 0.6;
+
+        // Update camera to follow boat
+        const ca = state.player.cameraAngle;
+        ca.y = Math.max(0.1, Math.min(1.4, ca.y));
+        const dist = 8.0;
+        const camX = boat.position.x + dist * Math.sin(ca.x) * Math.cos(ca.y);
+        const camZ = boat.position.z + dist * Math.cos(ca.x) * Math.cos(ca.y);
+        const camY = boat.position.y + dist * Math.sin(ca.y) + 1.5;
+        const desiredPos = new THREE.Vector3(camX, camY, camZ);
+        this.world.camera.position.lerp(desiredPos, 0.08);
+        this.world.camera.lookAt(boat.position.x, boat.position.y + 0.5, boat.position.z);
+
+        // Wake particles
+        if (Math.abs(state.boatSpeed) > 0.02 && Math.random() < 0.3) {
+            const wakePos = boat.position.clone();
+            wakePos.x -= forward.x * 2.5;
+            wakePos.z -= forward.z * 2.5;
+            wakePos.y = -1.9;
+            this.factory.createParticle(wakePos, new THREE.Color(0xaaddff), 0.7);
+        }
+    }
+
     // --- Chopping system ---
     updateChopping(dt) {
         const state = this.state;
         if (!state.isChopping || !state.interactionTarget) {
-            // Hide chop indicator
             if (this.ui.chopIndicator) this.ui.chopIndicator.style.display = 'none';
             return;
         }
 
         const tree = state.interactionTarget;
-        // Check still in range
         const dx = tree.position.x - state.player.pos.x;
         const dz = tree.position.z - state.player.pos.z;
         if (Math.sqrt(dx * dx + dz * dz) > 3.5) {
@@ -267,7 +427,6 @@ export default class GameEngine {
 
         state.chopTimer += dt;
 
-        // Show chop progress indicator
         if (this.ui.chopIndicator) {
             this.ui.chopIndicator.style.display = 'block';
             if (this.ui.chopFill) {
@@ -275,44 +434,36 @@ export default class GameEngine {
             }
         }
 
-        // Hit every 0.4 seconds
         if (state.chopTimer >= 0.4) {
             state.chopTimer = 0;
             state.chopProgress++;
             this.audio.chop();
 
-            // Visual feedback — shake tree
             const shakeX = (Math.random() - 0.5) * 0.15;
             const origX = tree.position.x;
             tree.position.x += shakeX;
             setTimeout(() => { if (tree.parent) tree.position.x = origX; }, 100);
 
-            // Chop particles
             this.factory.createChopParticles(tree.position.clone(), this.state.palette.trunk);
 
-            // Tree felled!
             if (state.chopProgress >= 5) {
                 this.audio.treeFall();
                 const logX = tree.position.x + (Math.random() - 0.5) * 0.5;
                 const logZ = tree.position.z + (Math.random() - 0.5) * 0.5;
 
-                // Falling particles
                 for (let i = 0; i < 15; i++) {
                     this.factory.createParticle(tree.position.clone(), this.state.palette.flora, 1.5);
                 }
 
-                // Remove tree
                 this.world.remove(tree);
                 const idx = state.entities.indexOf(tree);
                 if (idx > -1) state.entities.splice(idx, 1);
                 if (state.obstacles.includes(tree)) state.obstacles.splice(state.obstacles.indexOf(tree), 1);
 
-                // Spawn log
                 const log = this.factory.createLog(this.state.palette, logX, logZ);
                 this.world.add(log);
                 state.entities.push(log);
 
-                // Reset chopping state
                 state.isChopping = false;
                 state.chopProgress = 0;
                 state.interactionTarget = null;
@@ -327,17 +478,15 @@ export default class GameEngine {
         const playerPos = state.player.pos;
         const pickupRange = 1.5;
 
-        // Check entities for auto-pickup items (logs)
         for (let i = state.entities.length - 1; i >= 0; i--) {
             const e = state.entities[i];
             if (!e.userData.autoPickup) continue;
             const dx = e.position.x - playerPos.x;
             const dz = e.position.z - playerPos.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < pickupRange && e.scale.x > 0.5) { // Wait for spawn-in animation
+            if (dist < pickupRange && e.scale.x > 0.5) {
                 if (e.userData.type === 'log') {
-                    // Try adding to inventory first
-                    const added = this.addToInventory('log', e.userData.color, null);
+                    const added = this.addToInventory('wood', e.userData.color, null);
                     if (added) {
                         this.audio.pickup();
                         for (let j = 0; j < 8; j++) this.factory.createParticle(e.position.clone(), e.userData.color, 0.8);
@@ -349,13 +498,40 @@ export default class GameEngine {
         }
     }
 
+    // --- Boat proximity check ---
+    updateBoatProximity() {
+        const state = this.state;
+        if (state.isOnBoat) return;
+
+        let nearBoat = null;
+        let nearBoatDist = Infinity;
+        state.entities.forEach(e => {
+            if (e.userData.type === 'boat') {
+                const d = state.player.pos.distanceTo(e.position);
+                if (d < 6 && d < nearBoatDist) {
+                    nearBoat = e;
+                    nearBoatDist = d;
+                }
+            }
+        });
+
+        if (nearBoat && !this.boatPromptVisible) {
+            if (this.ui.boatPrompt) this.ui.boatPrompt.style.display = 'block';
+            this.boatPromptVisible = true;
+        } else if (!nearBoat && this.boatPromptVisible) {
+            if (this.ui.boatPrompt) this.ui.boatPrompt.style.display = 'none';
+            this.boatPromptVisible = false;
+        }
+        this._nearestBoat = nearBoat;
+    }
+
     animate(t) {
         requestAnimationFrame(this.animate);
         t *= 0.001;
         const state = this.state;
         const camera = this.world.camera;
         const O_Y = this.factory.O_Y;
-        const dt = 0.016; // ~60fps fixed step
+        const dt = 0.016;
 
         if (state.phase === 'playing') {
             // --- Water animation ---
@@ -364,33 +540,39 @@ export default class GameEngine {
                 if (water) { water.rotation.z += 0.001; water.position.y = -2.0 + Math.sin(t * 0.5) * 0.15; }
             });
 
-            // --- Player update (movement, physics, animation) ---
-            this.playerController.update(dt, state.islands);
+            // --- Boat/log animation ---
+            state.entities.forEach(e => {
+                if (e.userData.type === 'boat' && e !== state.activeBoat) {
+                    e.position.y = Math.sin(t * 1.5 + e.position.x) * 0.1;
+                    e.rotation.z = Math.sin(t * 0.8 + e.position.z) * 0.02;
+                }
+                if (e.userData.type === 'log') {
+                    e.position.y = Math.sin(t * 2 + e.position.x * 0.5) * 0.08 - 0.1;
+                    e.rotation.z = Math.PI / 2 + Math.sin(t * 1.2 + e.position.z) * 0.05;
+                }
+            });
 
-            // --- Camera ---
-            this.playerController.updateCamera(camera);
-
-            // --- Input interaction check (highlighting) ---
-            this.input.updateInteraction();
-
-            // --- Chopping ---
-            this.updateChopping(dt);
-
-            // --- Auto-pickup ---
-            this.updateAutoPickup();
+            // --- Player/Boat update ---
+            if (state.isOnBoat) {
+                this.updateBoatPhysics(dt);
+            } else {
+                this.playerController.update(dt, state.islands);
+                this.playerController.updateCamera(camera);
+                this.input.updateInteraction();
+                this.updateChopping(dt);
+                this.updateAutoPickup();
+                this.updateBoatProximity();
+            }
 
             // --- Entity updates ---
             for (let i = state.entities.length - 1; i >= 0; i--) {
                 const e = state.entities[i];
-                // Spawn-in scale animation
                 if (e.scale.x < 0.99) e.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
 
-                // Creature/chief bobbing
                 if (e.userData.type === 'creature' || e.userData.type === 'chief') {
                     e.position.y = O_Y + 0.3 + Math.sin(t * 4 + (e.userData.hopOffset || 0)) * 0.03;
                 }
 
-                // Tree/bush food production
                 if (e.userData.type === 'tree' || e.userData.type === 'bush') {
                     e.userData.productionTimer = (e.userData.productionTimer || 0) + dt;
                     if (e.userData.productionTimer > 25) {
@@ -442,7 +624,6 @@ export default class GameEngine {
                             e.position.z += e.userData.wanderDir.z * e.userData.moveSpeed * 0.5;
                         }
                     }
-                    // Keep creature on its island
                     const bc = e.userData.boundCenter || { x: 0, z: 0 };
                     const boundR = e.userData.boundRadius || 8;
                     const relX = e.position.x - bc.x;

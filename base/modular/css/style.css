@@ -462,3 +462,94 @@ input[type=range] {
     background: #fff;
     color: #000;
 }
+
+/* Boat & Island UI */
+#boat-prompt {
+    position: absolute;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 0.65rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 20px;
+    border: 2px solid #88ccff;
+    box-shadow: 0 0 15px rgba(136, 204, 255, 0.4);
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    animation: promptPulse 1.5s infinite;
+}
+
+@keyframes promptPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 15px rgba(136, 204, 255, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 25px rgba(136, 204, 255, 0.8);
+    }
+}
+
+#boat-nav-hint {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #88ccff;
+    font-size: 0.55rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 8px 16px;
+    border: 1px solid #88ccff;
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+}
+
+#boat-build-progress {
+    position: absolute;
+    bottom: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #ffcc44;
+    font-size: 0.6rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 16px;
+    border: 2px solid #ffcc44;
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    animation: fadeIn 0.2s ease-out;
+}
+
+#island-indicator {
+    position: absolute;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 0.7rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 24px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    animation: slideDown 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.icon-wood {
+    width: 18px;
+    height: 8px;
+    background: currentColor;
+    border: 2px solid rgba(0, 0, 0, 0.4);
+    border-radius: 2px;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+}

@@ -49,5 +49,12 @@ export default class GameState {
         // Mouse
         this.mouseX = 0;
         this.mouseY = 0;
+
+        // Boat navigation
+        this.isOnBoat = false;
+        this.activeBoat = null;
+        this.boatSpeed = 0;
+        this.boatMaxSpeed = 0.12;
+        this.boatRotation = 0;
     }
 }
