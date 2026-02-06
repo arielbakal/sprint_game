@@ -378,7 +378,7 @@ export default class EntityFactory {
         const sailGeo = new THREE.ShapeGeometry(sailShape);
         const sailColor = new THREE.Color(0xfff5e6);
         const sail = new THREE.Mesh(sailGeo, new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, flatShading: true }));
-        sail.position.set(0.01, -1.45, -0.4);
+        sail.position.set(0.01, -0.85, -0.4);
         sail.rotation.y = Math.PI / 2;
         g.add(sail);
 
