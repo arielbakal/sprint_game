@@ -29,6 +29,13 @@ export default class InputHandler {
                 this.engine.updateInventory();
             }
             if (k === 'm' && state.gameMode === 'fps') document.exitPointerLock();
+            if (k === 'e' && state.phase === 'playing' && state.gameMode === 'fps') {
+                if (state.isOnBoat) {
+                    this.engine.disembarkBoat();
+                } else if (this.engine._nearestBoat) {
+                    this.engine.boardBoat(this.engine._nearestBoat);
+                }
+            }
             if (k === 'g' && state.phase === 'playing') {
                 const nextMode = state.gameMode === 'creator' ? 'fps' : 'creator';
                 this.engine.switchGameMode(nextMode);
@@ -110,6 +117,7 @@ export default class InputHandler {
 
             if (state.gameMode === 'fps') {
                 if (document.pointerLockElement !== renderer.domElement) return;
+                if (state.isOnBoat) return; // No interaction while sailing
                 const now = performance.now();
                 if (now - (state.lastInteractTime || 0) < 800) return;
                 state.lastInteractTime = now;
@@ -216,20 +224,48 @@ export default class InputHandler {
 
         if (!this.engine.waterMesh) return;
 
-        const waterHits = this.raycaster.intersectObject(this.engine.waterMesh);
-        if (waterHits.length && waterHits[0].distance < 20) {
-            sfx.place();
-            const p = waterHits[0].point;
-            const log = factory.createLog(p.x, p.z, it.color);
-            world.add(log);
-            state.entities.push(log);
-            this.engine.logs.push(log);
-            for (let i = 0; i < 8; i++) factory.createParticle(p, it.color);
-            it.count = (it.count || 1) - 1;
-            if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
-            this.engine.updateInventory();
+        // Wood and tree items can be placed on water to build boats
+        if (it.type === 'wood' || it.type === 'tree') {
+            const waterHits = this.raycaster.intersectObject(this.engine.waterMesh);
+            if (waterHits.length && waterHits[0].distance < 20) {
+                sfx.place();
+                const p = waterHits[0].point;
+                const logColor = it.color || (it.style ? it.style.trunkColor : new THREE.Color(0x8B4513));
+                const log = factory.createLog(p.x, p.z, logColor);
+                world.add(log);
+                state.entities.push(log);
+                this.engine.logs.push(log);
+                for (let i = 0; i < 8; i++) factory.createParticle(p, logColor);
+                it.count = (it.count || 1) - 1;
+                if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+                this.engine.updateInventory();
+                this.checkForBoat(world, factory, sfx);
+                this.updateBuildProgress();
+                return;
+            }
+        }
 
-            this.checkForBoat(world, factory, sfx);
+        // Regular placement on ground
+        if (!this.engine.groundPlane) return;
+        const groundHits = this.raycaster.intersectObject(this.engine.groundPlane);
+
+        // Also check second island ground
+        let secondGroundHits = [];
+        if (this.engine.secondGroundPlane) {
+            secondGroundHits = this.raycaster.intersectObject(this.engine.secondGroundPlane);
+        }
+
+        const allHits = [...groundHits, ...secondGroundHits].sort((a, b) => a.distance - b.distance);
+        if (allHits.length && allHits[0].distance < 20) {
+            sfx.place();
+            const p = allHits[0].point;
+            const ent = this.createEntityFromItem(it, p);
+            if (ent) {
+                for (let i = 0; i < 8; i++) factory.createParticle(p, it.color);
+                it.count = (it.count || 1) - 1;
+                if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+                this.engine.updateInventory();
+            }
         }
     }
 
@@ -238,7 +274,10 @@ export default class InputHandler {
         const world = this.engine.world;
         const factory = this.engine.factory;
         const sfx = this.engine.audio;
-        const foodHits = this.raycaster.intersectObjects(state.foods, true);
+
+        // Check foods from both islands
+        const allFoods = [...state.foods, ...state.secondFoods];
+        const foodHits = this.raycaster.intersectObjects(allFoods, true);
         if (foodHits.length && foodHits[0].distance < 8) {
             const f = foodHits[0].object;
             sfx.pickup();
@@ -248,11 +287,18 @@ export default class InputHandler {
                 const center = f.position.clone();
                 for (let i = 0; i < 15; i++) factory.createParticle(center, color, 1.0);
                 world.remove(f);
-                state.foods.splice(state.foods.indexOf(f), 1);
+                // Remove from whichever food array it belongs to
+                const mainIdx = state.foods.indexOf(f);
+                if (mainIdx > -1) state.foods.splice(mainIdx, 1);
+                const secIdx = state.secondFoods.indexOf(f);
+                if (secIdx > -1) state.secondFoods.splice(secIdx, 1);
             } else sfx.pop();
             return;
         }
-        const hits = this.raycaster.intersectObjects(state.entities, true);
+
+        // Check entities from both islands
+        const allEntities = [...state.entities, ...state.secondEntities];
+        const hits = this.raycaster.intersectObjects(allEntities, true);
         if (hits.length && hits[0].distance < 8) {
             let root = hits[0].object;
             while (root.parent && root.parent !== world.scene) root = root.parent;
@@ -262,17 +308,42 @@ export default class InputHandler {
                 d.style.display = 'flex';
                 document.getElementById('dialog-text').innerHTML = "CHIEF:<br>Run! The giant is chasing me!<br>...Wait, are you friendly?";
                 sfx.sing();
+            } else if (root.userData.type === 'boat') {
+                // Boats are boarded with E key, not picked up
+                return;
             } else if (root.userData.type) {
                 sfx.pickup();
                 let styleData = root.userData.style;
                 if (root.userData.type === 'egg') styleData = root.userData.parentDNA;
-                const success = this.engine.addToInventory(root.userData.type, root.userData.color, styleData, root.userData.age);
+                const pickupType = root.userData.type;
+                // Logs go into inventory as 'wood'
+                const invType = pickupType === 'log' ? 'wood' : pickupType;
+                const success = this.engine.addToInventory(invType, root.userData.color, styleData, root.userData.age);
                 if (success) {
                     const center = root.position.clone(); center.y += 0.5;
                     for (let i = 0; i < 25; i++) factory.createParticle(center, root.userData.color, 1.5);
                     world.remove(root);
                     state.entities.splice(state.entities.indexOf(root), 1);
                     if (state.obstacles.includes(root)) state.obstacles.splice(state.obstacles.indexOf(root), 1);
+                    // Remove from logs array if it's a log
+                    if (pickupType === 'log') {
+                        const logIdx = this.engine.logs.indexOf(root);
+                        if (logIdx > -1) this.engine.logs.splice(logIdx, 1);
+                        this.updateBuildProgress();
+                    }
+                    // Also remove from second island arrays if applicable
+                    const secIdx = state.secondEntities.indexOf(root);
+                    if (secIdx > -1) state.secondEntities.splice(secIdx, 1);
+                    const secObs = state.secondObstacles.indexOf(root);
+                    if (secObs > -1) state.secondObstacles.splice(secObs, 1);
+                    // Trees drop extra wood for boat building
+                    if (pickupType === 'tree') {
+                        const woodColor = (root.userData.style && root.userData.style.trunkColor)
+                            ? root.userData.style.trunkColor.clone()
+                            : (root.userData.color ? root.userData.color.clone() : new THREE.Color(0x8B4513));
+                        this.engine.addToInventory('wood', woodColor, null, 0);
+                        this.updateBuildProgress();
+                    }
                 } else sfx.pop();
             }
         }
@@ -291,20 +362,45 @@ export default class InputHandler {
         this.raycaster.setFromCamera(this.mouse, world.camera);
 
         const it = state.inventory[state.selectedSlot];
-        const waterHits = this.raycaster.intersectObject(this.engine.waterMesh);
-        if (waterHits.length) {
-            sfx.place();
-            const p = waterHits[0].point;
-            const log = factory.createLog(p.x, p.z, it.color);
-            world.add(log);
-            state.entities.push(log);
-            this.engine.logs.push(log);
-            for (let i = 0; i < 8; i++) factory.createParticle(p, it.color);
-            it.count = (it.count || 1) - 1;
-            if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
-            this.engine.updateInventory();
 
-            this.checkForBoat(world, factory, sfx);
+        // Wood/tree items go to water as logs
+        if (it.type === 'wood' || it.type === 'tree') {
+            const waterHits = this.raycaster.intersectObject(this.engine.waterMesh);
+            if (waterHits.length) {
+                sfx.place();
+                const p = waterHits[0].point;
+                const logColor = it.color || (it.style ? it.style.trunkColor : new THREE.Color(0x8B4513));
+                const log = factory.createLog(p.x, p.z, logColor);
+                world.add(log);
+                state.entities.push(log);
+                this.engine.logs.push(log);
+                for (let i = 0; i < 8; i++) factory.createParticle(p, logColor);
+                it.count = (it.count || 1) - 1;
+                if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+                this.engine.updateInventory();
+                this.checkForBoat(world, factory, sfx);
+                this.updateBuildProgress();
+                return;
+            }
+        }
+
+        // Regular placement on ground
+        const groundHits = this.raycaster.intersectObject(this.engine.groundPlane);
+        let secondGroundHits = [];
+        if (this.engine.secondGroundPlane) {
+            secondGroundHits = this.raycaster.intersectObject(this.engine.secondGroundPlane);
+        }
+        const allHits = [...groundHits, ...secondGroundHits].sort((a, b) => a.distance - b.distance);
+        if (allHits.length) {
+            sfx.place();
+            const p = allHits[0].point;
+            const ent = this.createEntityFromItem(it, p);
+            if (ent) {
+                for (let i = 0; i < 8; i++) factory.createParticle(p, it.color);
+                it.count = (it.count || 1) - 1;
+                if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
+                this.engine.updateInventory();
+            }
         }
     }
 
@@ -344,11 +440,13 @@ export default class InputHandler {
                 const boat = factory.createBoat(centerX, centerZ, logs[i].userData.color);
                 world.add(boat);
                 this.engine.state.entities.push(boat);
-                sfx.place();
-                for (let k = 0; k < 20; k++) factory.createParticle({ x: centerX, y: -1.5, z: centerZ }, logs[i].userData.color, 1.5);
+                sfx.boatBuild();
+                for (let k = 0; k < 30; k++) factory.createParticle({ x: centerX, y: -1.5, z: centerZ }, logs[i].userData.color, 2.0);
 
-                logs.splice(0).filter((_, idx) => !cluster.includes(idx));
-                this.engine.logs = logs.filter((_, idx) => !cluster.includes(idx));
+                // Clean up logs array - remove clustered logs
+                const clusterSet = new Set(cluster);
+                this.engine.logs = this.engine.logs.filter((_, idx) => !clusterSet.has(idx));
+                this.updateBuildProgress();
                 return;
             }
         }
@@ -366,13 +464,26 @@ export default class InputHandler {
             if (idx > -1) {
                 let styleData = held.userData.style;
                 if (held.userData.type === 'egg') styleData = held.userData.parentDNA;
-                const success = this.engine.addToInventory(held.userData.type, held.userData.color, styleData, held.userData.age);
+                const pickupType = held.userData.type;
+                const invType = pickupType === 'log' ? 'wood' : pickupType;
+                const success = this.engine.addToInventory(invType, held.userData.color, styleData, held.userData.age);
                 if (success) {
                     const center = held.position.clone(); center.y += 0.5;
                     for (let i = 0; i < 25; i++) factory.createParticle(center, held.userData.color, 1.5);
                     world.remove(held);
                     state.entities.splice(idx, 1);
                     if (state.obstacles.includes(held)) state.obstacles.splice(state.obstacles.indexOf(held), 1);
+                    if (pickupType === 'log') {
+                        const logIdx = this.engine.logs.indexOf(held);
+                        if (logIdx > -1) this.engine.logs.splice(logIdx, 1);
+                        this.updateBuildProgress();
+                    }
+                    if (pickupType === 'tree') {
+                        const woodColor = (held.userData.style && held.userData.style.trunkColor)
+                            ? held.userData.style.trunkColor.clone()
+                            : (held.userData.color ? held.userData.color.clone() : new THREE.Color(0x8B4513));
+                        this.engine.addToInventory('wood', woodColor, null, 0);
+                    }
                 } else sfx.pop();
             }
         } else {
@@ -425,6 +536,10 @@ export default class InputHandler {
         if (it.type === 'rock') ent = factory.createRock(state.palette, p.x, p.z, it.style);
         if (it.type === 'grass') ent = factory.createGrass(state.palette, p.x, p.z, it.style);
         if (it.type === 'flower') ent = factory.createFlower(state.palette, p.x, p.z, it.style);
+        if (it.type === 'wood') {
+            ent = factory.createLog(p.x, p.z, it.color);
+            this.engine.logs.push(ent);
+        }
         if (it.type === 'creature') {
             ent = factory.createCreature(state.palette, p.x, p.z, it.style);
             if (it.age) ent.userData.age = it.age;
@@ -442,6 +557,19 @@ export default class InputHandler {
             if (it.type !== 'food') state.entities.push(ent);
         }
         return ent;
+    }
+
+    updateBuildProgress() {
+        const logCount = this.engine.logs.length;
+        const progress = this.engine.ui.boatBuildProgress;
+        if (progress) {
+            if (logCount > 0 && logCount < 4) {
+                progress.style.display = 'block';
+                progress.textContent = `🪵 LOGS: ${logCount}/4`;
+            } else {
+                progress.style.display = 'none';
+            }
+        }
     }
 
     setupTouch() {

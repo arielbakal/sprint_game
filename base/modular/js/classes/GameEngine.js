@@ -20,6 +20,9 @@ export default class GameEngine {
         this.waterMesh = null;
         this.hintIslands = [];
         this.logs = [];
+        this.secondIslandGroup = null;
+        this.secondGroundPlane = null;
+        this.boatPromptVisible = false;
         this.ui = {};
         this.setupUI();
         this.initSpheres();
@@ -47,6 +50,9 @@ export default class GameEngine {
         this.ui.volIcon = document.getElementById('vol-icon');
         this.ui.settingsBtn = document.getElementById('settings-btn');
         this.ui.settingsPopup = document.getElementById('settings-popup');
+        this.ui.boatPrompt = document.getElementById('boat-prompt');
+        this.ui.boatBuildProgress = document.getElementById('boat-build-progress');
+        this.ui.islandIndicator = document.getElementById('island-indicator');
         for (let i = 0; i < 8; i++) {
             const div = document.createElement('div');
             div.className = 'slot';
@@ -128,6 +134,7 @@ export default class GameEngine {
                 d.className = `icon-${it.type}`;
                 if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
                 if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
+                if (it.type === 'wood') d.style.background = d.style.color;
                 el.appendChild(d);
                 if (it.count > 1) {
                     const countEl = document.createElement('span');
@@ -204,6 +211,21 @@ export default class GameEngine {
         });
         this.world.remove(this.islandGroup);
         this.hintIslands.forEach(h => this.world.remove(h));
+        // Clean up second island
+        if (this.secondIslandGroup) {
+            this.world.remove(this.secondIslandGroup);
+            this.secondIslandGroup = null;
+            this.secondGroundPlane = null;
+        }
+        this.state.secondEntities.forEach(e => this.world.remove(e));
+        this.state.secondFoods.forEach(f => this.world.remove(f));
+        this.state.secondEntities = [];
+        this.state.secondFoods = [];
+        this.state.secondObstacles = [];
+        this.state.isOnBoat = false;
+        this.state.activeBoat = null;
+        this.state.currentIsland = 0;
+        this.logs = [];
         this.audio.fadeOut();
         setTimeout(() => this.initGame(null), 800);
     }
@@ -259,11 +281,42 @@ export default class GameEngine {
         this.waterMesh = island.group.children.find(c => c.userData.type === 'water');
         this.world.add(this.islandGroup);
 
-        const leftHint = this.factory.createHintIsland(this.state.palette, -22, 0.35);
-        const rightHint = this.factory.createHintIsland(this.state.palette, 22, 0.35);
+        const leftHint = this.factory.createHintIsland(this.state.palette, -30, 0.25);
+        const rightHint = this.factory.createHintIsland(this.state.palette, 30, 0.25);
         this.hintIslands = [leftHint, rightHint];
         this.world.add(leftHint);
         this.world.add(rightHint);
+
+        // === SECOND ISLAND ===
+        this.state.secondPalette = this.factory.generatePalette(null);
+        this.state.secondWorldDNA = this.factory.generateWorldDNA();
+        const secondIsland = this.factory.createIsland(this.state.secondPalette);
+        this.secondIslandGroup = secondIsland.group;
+        this.secondGroundPlane = secondIsland.groundPlane;
+        const secondScale = 1.8;
+        this.secondIslandGroup.scale.set(secondScale, secondScale, secondScale);
+        const offset = this.state.secondIslandOffset;
+        this.secondIslandGroup.position.set(offset.x, this.factory.O_Y * (1 - secondScale), offset.z);
+        // Remove the second island's water plane (we use the main island's water)
+        const secondWater = this.secondIslandGroup.children.find(c => c.userData.type === 'water');
+        if (secondWater) this.secondIslandGroup.remove(secondWater);
+        this.world.add(this.secondIslandGroup);
+
+        // Populate second island
+        const savedDNA = this.state.worldDNA;
+        this.state.worldDNA = this.state.secondWorldDNA;
+        const rnd2 = (minR = 2.0) => {
+            const a = Math.random() * 6.28;
+            const r2 = minR + Math.random() * (9.0 - minR);
+            return { x: offset.x + Math.cos(a) * r2, z: offset.z + Math.sin(a) * r2 };
+        };
+        for (let i = 0; i < 10; i++) { const p2 = rnd2(); const e = this.factory.createTree(this.state.secondPalette, p2.x, p2.z); this.world.add(e); this.state.secondEntities.push(e); }
+        for (let i = 0; i < 14; i++) { const p2 = rnd2(); const e = this.factory.createBush(this.state.secondPalette, p2.x, p2.z); this.world.add(e); this.state.secondEntities.push(e); }
+        for (let i = 0; i < 8; i++) { const p2 = rnd2(); const e = this.factory.createRock(this.state.secondPalette, p2.x, p2.z); this.world.add(e); this.state.secondEntities.push(e); }
+        for (let i = 0; i < 50; i++) { const p2 = rnd2(1.0); const e = this.factory.createGrass(this.state.secondPalette, p2.x, p2.z); this.world.add(e); this.state.secondEntities.push(e); }
+        for (let i = 0; i < 12; i++) { const p2 = rnd2(); const e = this.factory.createFlower(this.state.secondPalette, p2.x, p2.z); this.world.add(e); this.state.secondEntities.push(e); }
+        for (let i = 0; i < 3; i++) { const p2 = rnd2(); const c = this.factory.createCreature(this.state.secondPalette, p2.x, p2.z); this.world.add(c); this.state.secondEntities.push(c); }
+        this.state.worldDNA = savedDNA;
 
         this.state.player.pos = new THREE.Vector3(0, 5, 0);
 
@@ -290,6 +343,13 @@ export default class GameEngine {
         const state = this.state;
         const camera = this.world.camera;
         const O_Y = this.factory.O_Y;
+
+        // If on boat, use boat physics instead
+        if (state.isOnBoat) {
+            this.updateBoatPhysics();
+            return;
+        }
+
         state.player.yaw += (state.player.targetYaw - state.player.yaw) * 0.3;
         state.player.pitch += (state.player.targetPitch - state.player.pitch) * 0.3;
         const forward = new THREE.Vector3(-Math.sin(state.player.targetYaw), 0, -Math.cos(state.player.targetYaw));
@@ -308,22 +368,179 @@ export default class GameEngine {
         }
         state.player.vel.y -= 0.007;
         state.player.pos.add(state.player.vel);
+
         const floorY = O_Y + 1.0;
-        const groundRadius = 7 * (this.islandGroup ? this.islandGroup.scale.x : 1);
+
+        // Check ground for current island
+        const mainRadius = 7 * (this.islandGroup ? this.islandGroup.scale.x : 1);
+        const offset = state.secondIslandOffset;
+        const secondRadius = 7 * (this.secondIslandGroup ? this.secondIslandGroup.scale.x : 1);
+        const dxMain = state.player.pos.x;
+        const dzMain = state.player.pos.z;
+        const distToMain = Math.sqrt(dxMain * dxMain + dzMain * dzMain);
+        const dxSecond = state.player.pos.x - offset.x;
+        const dzSecond = state.player.pos.z - offset.z;
+        const distToSecond = Math.sqrt(dxSecond * dxSecond + dzSecond * dzSecond);
+
+        let onGround = false;
         if (state.player.pos.y < floorY) {
-            if (state.player.pos.x ** 2 + state.player.pos.z ** 2 < groundRadius ** 2) {
+            if (distToMain < mainRadius) {
                 state.player.pos.y = floorY;
                 state.player.vel.y = 0;
                 state.player.canJump = true;
+                onGround = true;
+                if (state.currentIsland !== 0) {
+                    state.currentIsland = 0;
+                    this.updateIslandIndicator();
+                }
+            } else if (distToSecond < secondRadius) {
+                state.player.pos.y = floorY;
+                state.player.vel.y = 0;
+                state.player.canJump = true;
+                onGround = true;
+                if (state.currentIsland !== 1) {
+                    state.currentIsland = 1;
+                    this.updateIslandIndicator();
+                }
             }
         }
+
         if (state.player.pos.y < -15) state.player.pos.set(0, 5, 0);
-        const maxDist = groundRadius * 0.95;
-        const distFromCenter = Math.sqrt(state.player.pos.x ** 2 + state.player.pos.z ** 2);
-        if (distFromCenter > maxDist) {
-            const angle = Math.atan2(state.player.pos.z, state.player.pos.x);
-            state.player.pos.x = Math.cos(angle) * maxDist;
-            state.player.pos.z = Math.sin(angle) * maxDist;
+
+        // Boat proximity check
+        let nearBoat = null;
+        let nearBoatDist = Infinity;
+        state.entities.forEach(e => {
+            if (e.userData.type === 'boat') {
+                const d = state.player.pos.distanceTo(e.position);
+                if (d < 5 && d < nearBoatDist) {
+                    nearBoat = e;
+                    nearBoatDist = d;
+                }
+            }
+        });
+        if (nearBoat && !this.boatPromptVisible) {
+            this.ui.boatPrompt.style.display = 'block';
+            this.boatPromptVisible = true;
+        } else if (!nearBoat && this.boatPromptVisible) {
+            this.ui.boatPrompt.style.display = 'none';
+            this.boatPromptVisible = false;
+        }
+        this._nearestBoat = nearBoat;
+    }
+
+    boardBoat(boat) {
+        const state = this.state;
+        state.isOnBoat = true;
+        state.activeBoat = boat;
+        state.boatSpeed = 0;
+        state.boatRotation = boat.rotation.y;
+        state.player.vel.set(0, 0, 0);
+        state.player.canJump = false;
+        this.ui.boatPrompt.style.display = 'none';
+        this.boatPromptVisible = false;
+        this.audio.place();
+        // Show navigation hint
+        this.showBoatHUD(true);
+    }
+
+    disembarkBoat() {
+        const state = this.state;
+        if (!state.activeBoat) return;
+        const boatPos = state.activeBoat.position;
+
+        // Determine which island we're near
+        const offset = state.secondIslandOffset;
+        const distToMain = Math.sqrt(boatPos.x ** 2 + boatPos.z ** 2);
+        const distToSecond = Math.sqrt((boatPos.x - offset.x) ** 2 + (boatPos.z - offset.z) ** 2);
+
+        const islandScale = this.islandGroup ? this.islandGroup.scale.x : 2.0;
+        const secondScale = this.secondIslandGroup ? this.secondIslandGroup.scale.x : 1.8;
+        const mainRadius = 7 * islandScale;
+        const secondRadius = 7 * secondScale;
+
+        if (distToMain < mainRadius + 5) {
+            state.currentIsland = 0;
+            state.player.pos.set(boatPos.x * 0.7, this.factory.O_Y + 2, boatPos.z * 0.7);
+        } else if (distToSecond < secondRadius + 5) {
+            state.currentIsland = 1;
+            const dx = boatPos.x - offset.x;
+            const dz = boatPos.z - offset.z;
+            state.player.pos.set(offset.x + dx * 0.7, this.factory.O_Y + 2, offset.z + dz * 0.7);
+        } else {
+            // Too far from any island
+            this.audio.pop();
+            return;
+        }
+
+        state.isOnBoat = false;
+        state.boatSpeed = 0;
+        state.player.vel.set(0, 0, 0);
+        this.audio.pickup();
+        this.showBoatHUD(false);
+        this.updateIslandIndicator();
+    }
+
+    showBoatHUD(show) {
+        const prompt = document.getElementById('boat-nav-hint');
+        if (prompt) prompt.style.display = show ? 'block' : 'none';
+    }
+
+    updateIslandIndicator() {
+        if (this.ui.islandIndicator) {
+            const names = ['🏝️ HOME ISLAND', '🏝️ NEW ISLAND'];
+            this.ui.islandIndicator.textContent = names[this.state.currentIsland];
+            this.ui.islandIndicator.style.display = 'block';
+            setTimeout(() => { if (this.ui.islandIndicator) this.ui.islandIndicator.style.display = 'none'; }, 3000);
+        }
+    }
+
+    updateBoatPhysics() {
+        const state = this.state;
+        const boat = state.activeBoat;
+        if (!boat) return;
+
+        // Acceleration / deceleration
+        if (state.inputs.w) state.boatSpeed = Math.min(state.boatSpeed + 0.003, state.boatMaxSpeed);
+        else if (state.inputs.s) state.boatSpeed = Math.max(state.boatSpeed - 0.004, -state.boatMaxSpeed * 0.3);
+        else state.boatSpeed *= 0.98; // friction
+
+        // Steering
+        if (state.inputs.a) state.boatRotation += 0.02;
+        if (state.inputs.d) state.boatRotation -= 0.02;
+
+        // Apply movement
+        const forward = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
+        boat.position.x += forward.x * state.boatSpeed;
+        boat.position.z += forward.z * state.boatSpeed;
+        boat.rotation.y = state.boatRotation;
+
+        // Bobbing
+        const t = performance.now() * 0.001;
+        boat.position.y = Math.sin(t * 1.5) * 0.15;
+        boat.rotation.x = Math.sin(t * 1.2) * 0.03;
+        boat.rotation.z = Math.sin(t * 0.8) * 0.02;
+
+        // Position player on boat
+        state.player.pos.copy(boat.position);
+        state.player.pos.y += 0.5;
+
+        // Camera follows boat
+        const camera = this.world.camera;
+        state.player.yaw += (state.player.targetYaw - state.player.yaw) * 0.3;
+        state.player.pitch += (state.player.targetPitch - state.player.pitch) * 0.3;
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = state.player.yaw;
+        camera.rotation.x = state.player.pitch;
+        camera.position.copy(state.player.pos);
+
+        // Wake particles
+        if (Math.abs(state.boatSpeed) > 0.02 && Math.random() < 0.3) {
+            const wakePos = boat.position.clone();
+            wakePos.x -= forward.x * 2;
+            wakePos.z -= forward.z * 2;
+            wakePos.y = -1.8;
+            this.factory.createParticle(wakePos, new THREE.Color(0x88ccff), 0.8);
         }
     }
 
@@ -364,12 +581,27 @@ export default class GameEngine {
                 const water = this.islandGroup.children.find(c => c.userData.type === 'water');
                 if (water) { water.rotation.z += 0.001; water.position.y = -2.0 + Math.sin(t * 0.5) * 0.15; }
             }
+
+            // Animate boat entities (bobbing when not being ridden)
+            state.entities.forEach(e => {
+                if (e.userData.type === 'boat' && e !== state.activeBoat) {
+                    e.position.y = Math.sin(t * 1.5 + e.position.x) * 0.1;
+                    e.rotation.z = Math.sin(t * 0.8 + e.position.z) * 0.02;
+                }
+                if (e.userData.type === 'log') {
+                    e.position.y = Math.sin(t * 2 + e.position.x * 0.5) * 0.08 - 0.1;
+                    e.rotation.z = Math.PI / 2 + Math.sin(t * 1.2 + e.position.z) * 0.05;
+                }
+            });
+
             if (state.gameMode === 'fps') {
                 this.updatePlayerPhysics();
-                camera.rotation.order = "YXZ";
-                camera.rotation.y = state.player.yaw;
-                camera.rotation.x = state.player.pitch;
-                camera.position.copy(state.player.pos);
+                if (!state.isOnBoat) {
+                    camera.rotation.order = "YXZ";
+                    camera.rotation.y = state.player.yaw;
+                    camera.rotation.x = state.player.pitch;
+                    camera.position.copy(state.player.pos);
+                }
             } else {
                 const targetY = 4 + Math.sin(t * 0.5) * 0.3;
                 camera.position.x = Math.sin(state.camAngle) * state.camRadius;
@@ -542,6 +774,56 @@ export default class GameEngine {
                     }
                 }
             }
+
+            // Update second island entities (scale-in animation + creature/plant behavior)
+            for (let i = state.secondEntities.length - 1; i >= 0; i--) {
+                const e = state.secondEntities[i];
+                if (!e.parent) { state.secondEntities.splice(i, 1); continue; }
+                if (e.scale.x < 0.99) e.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
+                if (e.userData.type === 'creature') {
+                    e.position.y = O_Y + 0.3 + Math.sin(t * 4 + (e.userData.hopOffset || 0)) * 0.03;
+                    // Simple wander on second island
+                    e.userData.cooldown = (e.userData.cooldown || 0) - 0.016;
+                    if (e.userData.cooldown <= 0) {
+                        e.userData.cooldown = 2 + Math.random() * 3;
+                        e.userData.wanderDir = new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).normalize();
+                    }
+                    if (e.userData.wanderDir) {
+                        e.position.x += e.userData.wanderDir.x * 0.01;
+                        e.position.z += e.userData.wanderDir.z * 0.01;
+                    }
+                    const off = state.secondIslandOffset;
+                    const bR = 6.0 * (this.secondIslandGroup ? this.secondIslandGroup.scale.x : 1);
+                    const dx = e.position.x - off.x;
+                    const dz = e.position.z - off.z;
+                    if (dx * dx + dz * dz > bR * bR) {
+                        const a = Math.atan2(dz, dx);
+                        e.position.x = off.x + Math.cos(a) * bR * 0.9;
+                        e.position.z = off.z + Math.sin(a) * bR * 0.9;
+                    }
+                }
+                if (e.userData.type === 'tree' || e.userData.type === 'bush') {
+                    e.userData.productionTimer = (e.userData.productionTimer || 0) + 0.016;
+                    if (e.userData.productionTimer > 30) {
+                        e.userData.productionTimer = 0;
+                        const foodPos = e.position.clone();
+                        foodPos.x += (Math.random() - 0.5) * 1.2;
+                        foodPos.z += (Math.random() - 0.5) * 1.2;
+                        const food = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15), this.world.getMat(state.secondPalette ? state.secondPalette.accent : state.palette.accent));
+                        food.position.set(foodPos.x, O_Y + 0.15, foodPos.z);
+                        food.scale.set(0, 0, 0);
+                        this.world.add(food);
+                        state.secondFoods.push(food);
+                    }
+                }
+            }
+
+            // Update second island foods
+            state.secondFoods.forEach(f => {
+                if (f.scale.x < 0.99) f.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
+                f.position.y = O_Y + 0.15 + Math.sin(t * 3 + f.position.x) * 0.05;
+                f.rotation.y += 0.02;
+            });
 
             state.foods.forEach(f => {
                 if (f.scale.x < 0.99) f.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);

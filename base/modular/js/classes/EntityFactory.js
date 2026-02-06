@@ -277,7 +277,7 @@ export default class EntityFactory {
         const grass = new THREE.Mesh(this.generateTerrain(6.3, 30, -0.1, 0.1), this.getMat(palette.groundTop));
         grass.rotation.x = -Math.PI / 2; grass.position.y = this.O_Y;
         grass.userData = { type: 'ground' };
-        const waterGeo = new THREE.CircleGeometry(60, 40);
+        const waterGeo = new THREE.CircleGeometry(120, 50);
         const wp = waterGeo.attributes.position;
         for (let i = 1; i < wp.count; i++) wp.setZ(i, wp.getZ(i) + (Math.random() - 0.5) * 0.8);
         waterGeo.computeVertexNormals();
@@ -305,17 +305,38 @@ export default class EntityFactory {
 
     createBoat(x, z, color) {
         const g = new THREE.Group();
+        // Hull (wider, boat-shaped)
         const hullGeo = new THREE.BoxGeometry(3.5, 0.6, 1.8);
         const hull = new THREE.Mesh(hullGeo, this.getMat(color));
         hull.position.y = -1.8;
         hull.scale.set(1, 0.7, 0.7);
         g.add(hull);
+        // Deck
         const deckGeo = new THREE.BoxGeometry(2.8, 0.15, 1.4);
         const deck = new THREE.Mesh(deckGeo, this.getMat(color));
         deck.position.y = -1.45;
         g.add(deck);
+        // Mast
+        const mastGeo = new THREE.CylinderGeometry(0.06, 0.08, 2.5, 6);
+        const mast = new THREE.Mesh(mastGeo, this.getMat(color.clone().multiplyScalar(0.7)));
+        mast.position.y = -0.2;
+        g.add(mast);
+        // Sail
+        const sailGeo = new THREE.PlaneGeometry(1.2, 1.8);
+        const sailColor = new THREE.Color(0xffeedd);
+        const sail = new THREE.Mesh(sailGeo, new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, flatShading: true }));
+        sail.position.set(0.65, -0.3, 0);
+        sail.rotation.y = Math.PI / 2;
+        g.add(sail);
+        // Bow (front point)
+        const bowGeo = new THREE.ConeGeometry(0.6, 1.2, 4);
+        const bow = new THREE.Mesh(bowGeo, this.getMat(color));
+        bow.rotation.z = Math.PI / 2;
+        bow.position.set(-2.1, -1.65, 0);
+        g.add(bow);
+
         g.position.set(x, 0, z);
-        g.userData = { type: 'boat', color: color };
+        g.userData = { type: 'boat', color: color, radius: 2.0 };
         return g;
     }
 

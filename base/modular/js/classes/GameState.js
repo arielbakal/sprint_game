@@ -42,5 +42,19 @@ export default class GameState {
         };
         this.inputs = { w: false, a: false, s: false, d: false, space: false };
         this.lastInteractTime = 0;
+
+        // Second island & boat navigation
+        this.currentIsland = 0; // 0 = main, 1 = second
+        this.isOnBoat = false;
+        this.activeBoat = null;
+        this.boatSpeed = 0;
+        this.boatMaxSpeed = 0.12;
+        this.boatRotation = 0;
+        this.secondIslandOffset = new THREE.Vector3(0, 0, 65);
+        this.secondPalette = null;
+        this.secondWorldDNA = null;
+        this.secondEntities = [];
+        this.secondFoods = [];
+        this.secondObstacles = [];
     }
 }
