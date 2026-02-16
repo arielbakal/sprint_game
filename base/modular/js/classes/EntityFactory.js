@@ -4,7 +4,8 @@
 
 import {
     BOAT_BASE_HEALTH, BOAT_BASE_MAX_SPEED, BOAT_BASE_ACCELERATION,
-    BOAT_BASE_TURN_SPEED, BOAT_BASE_DRAG, BOAT_BASE_BRAKE
+    BOAT_BASE_TURN_SPEED, BOAT_BASE_DRAG, BOAT_BASE_BRAKE,
+    BOAT_CLASSES
 } from '../constants.js';
 
 export default class EntityFactory {
@@ -664,7 +665,29 @@ export default class EntityFactory {
         return g;
     }
 
-    createBoat(x, z, color) {
+    createBoat(x, z, overrideColor = null) {
+        // Randomly select a boat class
+        let boatClass = BOAT_CLASSES.STANDARD;
+        const roll = Math.random();
+        let cumulativeWeight = 0;
+
+        for (const key in BOAT_CLASSES) {
+            cumulativeWeight += BOAT_CLASSES[key].weight;
+            if (roll < cumulativeWeight) {
+                boatClass = BOAT_CLASSES[key];
+                break;
+            }
+        }
+        //boatClass = BOAT_CLASSES['SPEEDSTER'];
+        // Apply stats modifiers
+        const maxHealth = Math.floor(BOAT_BASE_HEALTH * boatClass.healthMod);
+        const maxSpeed = BOAT_BASE_MAX_SPEED * boatClass.speedMod;
+        const acceleration = BOAT_BASE_ACCELERATION * boatClass.accelMod;
+        const turnSpeed = BOAT_BASE_TURN_SPEED * boatClass.turnMod;
+
+        // Color: Override or Class Color
+        const color = overrideColor || new THREE.Color(boatClass.color);
+
         const g = new THREE.Group();
         const darkWood = color.clone().multiplyScalar(0.6);
         const lightWood = color.clone().lerp(new THREE.Color(0xddccaa), 0.3);
@@ -768,12 +791,13 @@ export default class EntityFactory {
             color: color,
             radius: 2.5,
             stats: {
-                health: BOAT_BASE_HEALTH,
-                maxHealth: BOAT_BASE_HEALTH,
+                name: boatClass.name,
+                health: maxHealth,
+                maxHealth: maxHealth,
                 currentSpeed: 0,
-                maxSpeed: BOAT_BASE_MAX_SPEED,
-                acceleration: BOAT_BASE_ACCELERATION,
-                turnSpeed: BOAT_BASE_TURN_SPEED,
+                maxSpeed: maxSpeed,
+                acceleration: acceleration,
+                turnSpeed: turnSpeed,
                 drag: BOAT_BASE_DRAG,
                 brake: BOAT_BASE_BRAKE
             }

@@ -54,6 +54,54 @@ export const BOAT_BASE_TURN_SPEED = 0.02;
 export const BOAT_BASE_DRAG = 0.985;
 export const BOAT_BASE_BRAKE = 0.004;
 
+export const BOAT_CLASSES = {
+    STANDARD: {
+        weight: 0.40,
+        name: "Standard",
+        color: 0x8B4513, // SaddleBrown
+        healthMod: 1.0,
+        speedMod: 1.0,
+        accelMod: 1.0,
+        turnMod: 1.0
+    },
+    SPEEDSTER: {
+        weight: 0.15,
+        name: "Speedster",
+        color: 0xD32F2F, // Red
+        healthMod: 0.7,
+        speedMod: 2,
+        accelMod: 2.4,
+        turnMod: 0.8
+    },
+    TANK: {
+        weight: 0.15,
+        name: "Ironhull",
+        color: 0x546E7A, // BlueGrey
+        healthMod: 2.0,
+        speedMod: 0.8,
+        accelMod: 0.6,
+        turnMod: 0.6
+    },
+    AGILE: {
+        weight: 0.15,
+        name: "Hydro",
+        color: 0x039BE5, // LightBlue
+        healthMod: 0.8,
+        speedMod: 1.1,
+        accelMod: 1.3,
+        turnMod: 1.5
+    },
+    RUSTY: {
+        weight: 0.15,
+        name: "Old Rusty",
+        color: 0x6D4C41, // Brown500 (Desaturated)
+        healthMod: 0.6,
+        speedMod: 0.8,
+        accelMod: 0.7,
+        turnMod: 0.9
+    }
+};
+
 // Boat Durability
 export const BOAT_COLLISION_DAMAGE_MIN = 5;
 export const BOAT_COLLISION_DAMAGE_MAX = 25;

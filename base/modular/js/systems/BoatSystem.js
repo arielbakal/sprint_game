@@ -415,7 +415,7 @@ export default class BoatSystem {
         // Convert to "knots" (arbitrary logical scale for display)
         if (speedVal) speedVal.textContent = (Math.abs(stats.currentSpeed) * 100).toFixed(1);
         if (healthVal) {
-            healthVal.textContent = Math.ceil(stats.health);
+            healthVal.textContent = Math.ceil(stats.health) + (stats.name ? ` (${stats.name})` : '');
             healthVal.style.color = (stats.health < BOAT_CRITICAL_THRESHOLD) ? '#ff4444' : '#ffffff';
         }
 
