@@ -101,6 +101,7 @@ export default class PlayerController {
 
     update(dt, islands) {
         if (!this.playerGroup) return;
+        if (this.state.isDead) return;
         const state = this.state;
         const player = state.player;
         this.time += dt;
@@ -124,8 +125,9 @@ export default class PlayerController {
 
         if (isMoving) {
             moveDir.normalize();
-            player.vel.x = moveDir.x * player.speed;
-            player.vel.z = moveDir.z * player.speed;
+            const effectiveSpeed = player.speed + (player.speedBoost || 0);
+            player.vel.x = moveDir.x * effectiveSpeed;
+            player.vel.z = moveDir.z * effectiveSpeed;
             player.targetRotation = Math.atan2(moveDir.x, moveDir.z);
         } else {
             player.vel.x *= 0.8;
@@ -264,8 +266,22 @@ export default class PlayerController {
             this.modelPivot.quaternion.slerp(targetQ, 0.15);
         }
 
+        // --- Invincibility flash ---
+        if (state.invincibleTimer > 0 && this.modelPivot) {
+            this.modelPivot.visible = Math.sin(state.invincibleTimer * 16) > 0;
+        } else if (this.modelPivot && !this.modelPivot.visible && player.cameraMode !== 'first') {
+            this.modelPivot.visible = true;
+        }
+
         // --- Procedural animation ---
-        if (this.chopAnimState) {
+        if (state.isAttacking) {
+            // Attack swing: quick forward punch with right arm
+            const swingT = (state._attackVisualTimer || 0) / 0.3;
+            this.armR.rotation.x = -1.5 + swingT * 3.0; // wind up to forward
+            this.armL.rotation.x = THREE.MathUtils.lerp(this.armL.rotation.x, -0.3, 0.15);
+            this.legL.rotation.x = THREE.MathUtils.lerp(this.legL.rotation.x, 0, 0.1);
+            this.legR.rotation.x = THREE.MathUtils.lerp(this.legR.rotation.x, 0, 0.1);
+        } else if (this.chopAnimState) {
             // Chopping animation — override arms while chopping
             const { isSwinging, swingProgress } = this.chopAnimState;
 

@@ -89,47 +89,50 @@ export default class EntityAISystem {
         e.userData.age = (e.userData.age || 0) + dt;
         e.userData.hunger = (e.userData.hunger || 0) + dt * CREATURE_HUNGER_RATE;
 
-        // Find nearest food
-        let nearestFood = null, minDist = Infinity;
-        state.foods.forEach(f => {
-            const d = e.position.distanceTo(f.position);
-            if (d < minDist) { minDist = d; nearestFood = f; }
-        });
+        // When aggro'd, CombatSystem handles chase — skip food-seeking/wandering
+        if (!e.userData.aggroTimer || e.userData.aggroTimer <= 0) {
+            // Find nearest food
+            let nearestFood = null, minDist = Infinity;
+            state.foods.forEach(f => {
+                const d = e.position.distanceTo(f.position);
+                if (d < minDist) { minDist = d; nearestFood = f; }
+            });
 
-        if (nearestFood && minDist < 0.5) {
-            // Eat
-            audio.eat();
-            world.remove(nearestFood);
-            state.foods.splice(state.foods.indexOf(nearestFood), 1);
-            e.userData.hunger = 0;
-            e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
-            for (let j = 0; j < 3; j++) factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
+            if (nearestFood && minDist < 0.5) {
+                // Eat
+                audio.eat();
+                world.remove(nearestFood);
+                state.foods.splice(state.foods.indexOf(nearestFood), 1);
+                e.userData.hunger = 0;
+                e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
+                for (let j = 0; j < 3; j++) factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
 
-            // Breed (only if population is below cap)
-            const creatureCount = state.entities.filter(ent => ent.userData.type === 'creature' || ent.userData.type === 'egg').length;
-            if (e.userData.eatenCount >= CREATURE_BREED_EAT_THRESHOLD && e.userData.age > CREATURE_BREED_AGE && creatureCount < MAX_CREATURES) {
-                e.userData.eatenCount = 0;
-                audio.layEgg();
-                const egg = factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);
-                state.entities.push(egg);
-                world.add(egg);
-            }
-        } else if (nearestFood && minDist < 3) {
-            // Move toward food
-            const dir = nearestFood.position.clone().sub(e.position).normalize();
-            e.position.x += dir.x * e.userData.moveSpeed;
-            e.position.z += dir.z * e.userData.moveSpeed;
-            e.lookAt(new THREE.Vector3(nearestFood.position.x, e.position.y, nearestFood.position.z));
-        } else {
-            // Wander
-            e.userData.cooldown = (e.userData.cooldown || 0) - dt;
-            if (e.userData.cooldown <= 0) {
-                e.userData.cooldown = 1 + Math.random() * 2;
-                e.userData.wanderDir = new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).normalize();
-            }
-            if (e.userData.wanderDir) {
-                e.position.x += e.userData.wanderDir.x * e.userData.moveSpeed * 0.5;
-                e.position.z += e.userData.wanderDir.z * e.userData.moveSpeed * 0.5;
+                // Breed (only if population is below cap)
+                const creatureCount = state.entities.filter(ent => ent.userData.type === 'creature' || ent.userData.type === 'egg').length;
+                if (e.userData.eatenCount >= CREATURE_BREED_EAT_THRESHOLD && e.userData.age > CREATURE_BREED_AGE && creatureCount < MAX_CREATURES) {
+                    e.userData.eatenCount = 0;
+                    audio.layEgg();
+                    const egg = factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);
+                    state.entities.push(egg);
+                    world.add(egg);
+                }
+            } else if (nearestFood && minDist < 3) {
+                // Move toward food
+                const dir = nearestFood.position.clone().sub(e.position).normalize();
+                e.position.x += dir.x * e.userData.moveSpeed;
+                e.position.z += dir.z * e.userData.moveSpeed;
+                e.lookAt(new THREE.Vector3(nearestFood.position.x, e.position.y, nearestFood.position.z));
+            } else {
+                // Wander
+                e.userData.cooldown = (e.userData.cooldown || 0) - dt;
+                if (e.userData.cooldown <= 0) {
+                    e.userData.cooldown = 1 + Math.random() * 2;
+                    e.userData.wanderDir = new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).normalize();
+                }
+                if (e.userData.wanderDir) {
+                    e.position.x += e.userData.wanderDir.x * e.userData.moveSpeed * 0.5;
+                    e.position.z += e.userData.wanderDir.z * e.userData.moveSpeed * 0.5;
+                }
             }
         }
 

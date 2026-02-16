@@ -121,3 +121,25 @@ export const ROTATION_SLERP = 0.15;
 
 // Scale animation
 export const SCALE_LERP = 0.05;
+
+// Player combat
+export const PLAYER_MAX_HP = 20;
+export const PLAYER_BASE_ATTACK = 2;
+export const ATTACK_COOLDOWN = 0.4;
+export const ATTACK_RANGE = 3.5;
+export const ATTACK_ARC = Math.PI * 0.8;
+
+// Creature combat
+export const CREATURE_HP = 6;
+export const CREATURE_CONTACT_DAMAGE = 2;
+export const CREATURE_CONTACT_COOLDOWN = 1.0;
+export const CREATURE_AGGRO_DURATION = 5.0;
+
+// Death / respawn
+export const RESPAWN_INVINCIBILITY = 3.0;
+
+// Stat boosts
+export const STAT_BOOST_PICKUP_RANGE = 2.0;
+export const STAT_BOOST_BOB_SPEED = 3.0;
+export const STAT_BOOST_BOB_HEIGHT = 0.3;
+export const STAT_BOOST_SPIN_SPEED = 2.0;
