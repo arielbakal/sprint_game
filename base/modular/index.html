@@ -71,7 +71,16 @@
         <div id="mp-panel">
             <div id="mp-header">MULTIPLAYER</div>
             <div id="mp-status">Offline</div>
-            <input type="text" id="mp-url" value="ws://localhost:3001" placeholder="ws://host:port">
+            <input type="text" id="mp-url" placeholder="ws://host:port">
+            <script>
+                // Auto-fill the WebSocket URL based on current page URL
+                (function () {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const host = window.location.host;
+                    const path = window.location.pathname === '/' ? '' : window.location.pathname;
+                    document.getElementById('mp-url').value = `${protocol}//${host}${path}`;
+                })();
+            </script>
             <button id="mp-connect-btn">CONNECT</button>
             <div id="mp-player-count"></div>
         </div>

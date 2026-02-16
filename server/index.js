@@ -2,7 +2,8 @@
 // MULTIPLAYER SERVER - WebSocket game server stub
 // =====================================================
 // Usage: node server/index.js
-// Serves the game on port 3000 and WebSocket on port 3001
+// Serves the game on port 3000 (or PORT env var)
+// WebSocket runs on the SAME port.
 
 import { WebSocketServer } from 'ws';
 import http from 'http';
@@ -13,8 +14,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT_HTTP = process.env.PORT || 3000;
-const PORT_WS = process.env.WS_PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // --- Simple static file server ---
 const MIME_TYPES = {
@@ -47,12 +47,9 @@ const httpServer = http.createServer((req, res) => {
     });
 });
 
-httpServer.listen(PORT_HTTP, () => {
-    console.log(`[Server] Static files: http://localhost:${PORT_HTTP}`);
-});
-
 // --- WebSocket game server ---
-const wss = new WebSocketServer({ port: PORT_WS });
+// Attach WebSocketServer to the SAME http server instance
+const wss = new WebSocketServer({ server: httpServer });
 
 let nextPlayerId = 1;
 const players = new Map(); // ws → { id, position, rotation }
@@ -169,4 +166,7 @@ function broadcast(excludeWs, data) {
     }
 }
 
-console.log(`[Server] WebSocket server: ws://localhost:${PORT_WS}`);
+// Start the HTTP server (which also handles WebSocket upgrades)
+httpServer.listen(PORT, () => {
+    console.log(`[Server] Running on http://localhost:${PORT}`);
+});
