@@ -84,31 +84,65 @@ export default class InputHandler {
         const type = this.getSelectedType();
         const pc = this.engine.playerController;
 
-        if (type === 'axe' || type === 'pickaxe') {
-            // Create a visual tool to show in hand
-            if (!this._heldToolType || this._heldToolType !== type) {
-                let tool;
-                if (type === 'axe') {
-                    tool = this.engine.factory.createAxe(state.palette, 0, 0);
-                } else {
-                    tool = this.engine.factory.createPickaxe(state.palette, 0, 0);
-                }
-                // Remove from scene (we just want the mesh, not in the world)
-                this.engine.world.remove(tool);
-                // Factory creates at scale 0 (spawn animation) — reset for hand display
-                tool.scale.set(1, 1, 1);
-                tool.position.set(0, 0, 0);
-                tool.rotation.set(0, 0, 0);
-                pc.holdItem(tool);
-                this._heldToolType = type;
-            }
-        } else {
-            // Not a tool selected — clear held item
+        if (!type) {
+            // Nothing selected — clear held item
             if (this._heldToolType) {
                 pc.holdItem(null);
                 this._heldToolType = null;
             }
+            return;
         }
+
+        // Don't rebuild if same type already held
+        if (this._heldToolType === type) return;
+
+        let item = null;
+
+        if (type === 'axe' || type === 'pickaxe') {
+            if (type === 'axe') {
+                item = this.engine.factory.createAxe(state.palette, 0, 0);
+            } else {
+                item = this.engine.factory.createPickaxe(state.palette, 0, 0);
+            }
+            this.engine.world.remove(item);
+            item.scale.set(1, 1, 1);
+            item.position.set(0, 0, 0);
+            item.rotation.set(0, 0, 0);
+        } else {
+            // Build a simple held-item mesh for non-tool items
+            const invItem = state.inventory[state.selectedSlot];
+            if (!invItem) return;
+            const color = invItem.color || new THREE.Color(0xffffff);
+            const mat = new THREE.MeshToonMaterial({ color });
+            item = new THREE.Group();
+
+            switch (type) {
+                case 'wood':
+                case 'log': {
+                    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 6), mat);
+                    item.add(mesh);
+                    break;
+                }
+                case 'rock': {
+                    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.1), mat);
+                    item.add(mesh);
+                    break;
+                }
+                case 'food': {
+                    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 4), mat);
+                    item.add(mesh);
+                    break;
+                }
+                default: {
+                    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), mat);
+                    item.add(mesh);
+                    break;
+                }
+            }
+        }
+
+        pc.holdItem(item);
+        this._heldToolType = type;
     }
 
     /**
@@ -313,6 +347,7 @@ export default class InputHandler {
                 it.count = (it.count || 1) - 1;
                 if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
                 this.engine.updateInventory();
+                this._updateHeldToolVisual();
                 this.checkForBoat();
                 this.updateBuildProgress();
                 return;
@@ -336,6 +371,7 @@ export default class InputHandler {
                 it.count = (it.count || 1) - 1;
                 if (it.count <= 0) { state.inventory[state.selectedSlot] = null; state.selectedSlot = null; }
                 this.engine.updateInventory();
+                this._updateHeldToolVisual();
             }
         }
     }

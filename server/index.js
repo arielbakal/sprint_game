@@ -19,13 +19,13 @@ const PORT_WS = process.env.WS_PORT || 3001;
 // --- Simple static file server ---
 const MIME_TYPES = {
     '.html': 'text/html',
-    '.js':   'text/javascript',
-    '.css':  'text/css',
+    '.js': 'text/javascript',
+    '.css': 'text/css',
     '.json': 'application/json',
-    '.png':  'image/png',
-    '.jpg':  'image/jpeg',
-    '.svg':  'image/svg+xml',
-    '.txt':  'text/plain',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.txt': 'text/plain',
     '.woff2': 'font/woff2',
 };
 
@@ -88,7 +88,9 @@ wss.on('connection', (ws) => {
                 type: 'player_join',
                 id: otherData.id,
                 position: otherData.position,
-                rotation: otherData.rotation
+                rotation: otherData.rotation,
+                inventory: otherData.inventory || null,
+                selectedSlot: otherData.selectedSlot ?? null
             }));
         }
     }
@@ -119,6 +121,17 @@ wss.on('connection', (ws) => {
                         type: 'world_event',
                         playerId,
                         ...msg
+                    }));
+                    break;
+
+                case 'inventory_update':
+                    playerData.inventory = msg.inventory;
+                    playerData.selectedSlot = msg.selectedSlot;
+                    broadcast(ws, JSON.stringify({
+                        type: 'inventory_update',
+                        id: playerId,
+                        inventory: msg.inventory,
+                        selectedSlot: msg.selectedSlot
                     }));
                     break;
 
