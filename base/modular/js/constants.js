@@ -68,6 +68,7 @@ export const CREATURE_BREED_AGE = 8;
 export const EGG_HATCH_TIME = 10.0;
 export const CREATURE_HUNGER_WARN = 15;
 export const CREATURE_WANDER_RADIUS = 8;
+export const MAX_CREATURES = 15;          // population cap to prevent exponential growth
 
 // Food production
 export const FOOD_PRODUCTION_TIME = 25; // seconds
