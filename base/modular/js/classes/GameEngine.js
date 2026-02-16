@@ -20,6 +20,7 @@ import InventoryManager from '../systems/InventoryManager.js';
 import EntityAISystem from '../systems/EntityAISystem.js';
 import CatAI from '../systems/CatAI.js';
 import ParticleSystem from '../systems/ParticleSystem.js';
+import CombatSystem from '../systems/CombatSystem.js';
 
 // Network / multiplayer
 import NetworkManager from '../network/NetworkManager.js';
@@ -52,6 +53,7 @@ export default class GameEngine {
         this.entityAISystem = new EntityAISystem();
         this.catAI = new CatAI();
         this.particleSystem = new ParticleSystem();
+        this.combatSystem = new CombatSystem(this.ui);
 
         this.systems.register('boat', this.boatSystem);
         this.systems.register('chop', this.chopSystem);
@@ -60,6 +62,7 @@ export default class GameEngine {
         this.systems.register('entityAI', this.entityAISystem);
         this.systems.register('catAI', this.catAI);
         this.systems.register('particles', this.particleSystem);
+        this.systems.register('combat', this.combatSystem);
 
         // --- Multiplayer ---
         this.network = new NetworkManager();
@@ -98,6 +101,10 @@ export default class GameEngine {
         this.ui.boatPrompt = document.getElementById('boat-prompt');
         this.ui.boatBuildProgress = document.getElementById('boat-build-progress');
         this.ui.islandIndicator = document.getElementById('island-indicator');
+        this.ui.hpBar = document.getElementById('hp-bar');
+        this.ui.hpFill = document.getElementById('hp-fill');
+        this.ui.hpText = document.getElementById('hp-text');
+        this.ui.deathScreen = document.getElementById('death-screen');
         for (let i = 0; i < 8; i++) {
             const div = document.createElement('div');
             div.className = 'slot';
@@ -201,6 +208,14 @@ export default class GameEngine {
             f.userData.rotVel = new THREE.Vector3(Math.random(), Math.random(), Math.random());
             this.state.debris.push(f);
         });
+        this.state.statBoosts.forEach(b => {
+            b.userData.exploding = true;
+            b.userData.vel = b.position.clone().normalize().multiplyScalar(0.2 + Math.random() * 0.3);
+            b.userData.vel.y = 0.3 + Math.random() * 0.4;
+            b.userData.rotVel = new THREE.Vector3(Math.random(), Math.random(), Math.random());
+            this.state.debris.push(b);
+        });
+        this.state.statBoosts = [];
         this.state.entities = []; this.state.obstacles = []; this.state.foods = [];
         // Remove island groups
         this.islandGroups.forEach(ig => {
@@ -459,6 +474,30 @@ export default class GameEngine {
             this.world.add(c);
         }
 
+        // --- Stat Boost Crystals (many small pickups for testing) ---
+        const boostTypes = [
+            { stat: 'attack', amount: 1 },
+            { stat: 'speed', amount: 0.01 },
+            { stat: 'health', amount: 3 }
+        ];
+        const islandCenters = [
+            { cx: 0, cz: 0, maxR: 9.0 },
+            { cx: 80, cz: 0, maxR: 11.0 },
+            { cx: 0, cz: 110, maxR: 24.0 },
+            { cx: -90, cz: -50, maxR: 8.0 },
+            { cx: 50, cz: -100, maxR: 10.0 }
+        ];
+        for (const ic of islandCenters) {
+            const numBoosts = 4 + Math.floor(Math.random() * 4); // 4-7 per island
+            for (let b = 0; b < numBoosts; b++) {
+                const p = rndPolar(ic.cx, ic.cz, 2.0, ic.maxR);
+                const boostData = boostTypes[Math.floor(Math.random() * boostTypes.length)];
+                const boost = this.factory.createStatBoost(p.x, p.z, boostData);
+                this.world.add(boost);
+                this.state.statBoosts.push(boost);
+            }
+        }
+
         // Global clouds scattered across the entire map
         for (let i = 0; i < 40; i++) {
             const cx = (Math.random() - 0.5) * 300;
@@ -476,6 +515,19 @@ export default class GameEngine {
         this.state.player.onGround = false;
         this.state.player.cameraAngle = { x: 0, y: 0.3 };
         this.state.resources.logs = 0;
+
+        // Reset combat state
+        this.state.player.hp = 20;
+        this.state.player.maxHp = 20;
+        this.state.player.attack = 2;
+        this.state.player.baseAttack = 2;
+        this.state.player.speedBoost = 0;
+        this.state.attackCooldown = 0;
+        this.state.isAttacking = false;
+        this.state.invincibleTimer = 0;
+        this.state.isDead = false;
+        this.state.deathTimer = 0;
+
         this.playerController.createModel(this.state.palette);
 
         // Spawn companion cat near player
@@ -761,6 +813,9 @@ export default class GameEngine {
                 this.mineSystem.update(dt, ctx);
                 this.inventorySystem.update(dt, ctx);
             }
+
+            // --- Combat (always ticks for aggro, contact, death, UI) ---
+            this.combatSystem.update(dt, ctx);
 
             this.updateIslandIndicator();
 

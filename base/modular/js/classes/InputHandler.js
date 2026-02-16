@@ -253,6 +253,7 @@ export default class InputHandler {
             if (state.phase !== 'playing') return;
             if (!document.pointerLockElement) return;
             if (state.isOnBoat) return;
+            if (state.isDead) return;
 
             const selectedType = this.getSelectedType();
 
@@ -271,6 +272,18 @@ export default class InputHandler {
                     state.mineTimer = 0;
                     return;
                 }
+            }
+
+            // Try melee attack on nearby creatures (always attempt before interaction)
+            if (this.engine.combatSystem) {
+                const ctx = {
+                    state,
+                    audio: this.engine.audio,
+                    factory: this.engine.factory,
+                    world: this.engine.world
+                };
+                // Always try attack first — if it hits, skip interaction
+                if (this.engine.combatSystem.tryAttack(ctx)) return;
             }
 
             // Otherwise, interact/pickup
@@ -441,6 +454,9 @@ export default class InputHandler {
                 }
                 return;
             }
+
+            // Don't pick up creatures — they are attackable, not collectible
+            if (root.userData.type === 'creature') return;
 
             if (root.userData.type && root.userData.type !== 'tree') {
                 sfx.pickup();

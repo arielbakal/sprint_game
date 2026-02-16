@@ -465,7 +465,8 @@ export default class EntityFactory {
         g.userData = {
             type: 'creature', speciesType: dna.speciesType, radius: radius, hunger: 0, age: 0, eatenCount: 0,
             moveSpeed: moveSpeed, hopOffset: Math.random() * 100,
-            color: dna.color, bubble: null, style: dna, targetScale: scale, cooldown: 0
+            color: dna.color, bubble: null, style: dna, targetScale: scale, cooldown: 0,
+            hp: 6, aggroTimer: 0, contactCooldown: 0
         };
         return g;
     }
@@ -914,6 +915,36 @@ export default class EntityFactory {
             followDist: 1.8,
             idleTimer: 0,
             isIdle: false
+        };
+        return g;
+    }
+
+    createStatBoost(x, z, boostData) {
+        // boostData: { stat: 'attack'|'speed'|'health', amount: number }
+        const g = new THREE.Group();
+        const colorMap = { attack: 0xff4444, speed: 0x44ff44, health: 0xff88cc };
+        const color = new THREE.Color(colorMap[boostData.stat] || 0xffffff);
+
+        // Small glowing gem
+        const crystalGeo = new THREE.OctahedronGeometry(0.15, 0);
+        const crystalMat = new THREE.MeshStandardMaterial({
+            color: color,
+            emissive: color,
+            emissiveIntensity: 0.6,
+            flatShading: true
+        });
+        const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+        crystal.position.y = 0.3;
+        g.add(crystal);
+
+        g.position.set(x, this.O_Y, z);
+        g.scale.set(0, 0, 0);
+        g.userData = {
+            type: 'statBoost',
+            stat: boostData.stat,
+            amount: boostData.amount,
+            color: color,
+            crystal: crystal
         };
         return g;
     }

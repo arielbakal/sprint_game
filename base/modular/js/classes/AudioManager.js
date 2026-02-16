@@ -44,6 +44,7 @@ export default class AudioManager {
     sing() { this.chirp(600, 800, 0.1, 0.05); setTimeout(() => this.chirp(800, 1000, 0.1, 0.05), 150); setTimeout(() => this.chirp(1000, 700, 0.2, 0.05), 300); }
     layEgg() { this.chirp(400, 200, 0.15, 0.1); }
     die() { this.chirp(300, 100, 0.6, 0.1); }
+    hurt() { this.chirp(200, 100, 0.15, 0.12); setTimeout(() => this.chirp(150, 80, 0.1, 0.08), 100); }
 
     pet() {
         this.resume();
