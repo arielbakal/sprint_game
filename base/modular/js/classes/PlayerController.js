@@ -14,6 +14,7 @@ export default class PlayerController {
         this.armL = null;
         this.armR = null;
         this.time = 0;
+        this.chopAnimState = null; // set by ChopSystem: { isSwinging, swingProgress }
     }
 
     createModel(palette) {
@@ -264,7 +265,30 @@ export default class PlayerController {
         }
 
         // --- Procedural animation ---
-        if (isMoving && player.onGround) {
+        if (this.chopAnimState) {
+            // Chopping animation — override arms while chopping
+            const { isSwinging, swingProgress } = this.chopAnimState;
+
+            // Right arm (holds axe): swing forward on hit, hold raised between hits
+            if (isSwinging) {
+                // Swing: arm goes from raised (-1.2 rad) to forward/down (1.0 rad)
+                const t = 1.0 - swingProgress; // 0→1 over swing
+                const swingAngle = -1.2 + t * 2.2; // -1.2 → 1.0
+                this.armR.rotation.x = swingAngle;
+            } else {
+                // Between hits: hold arm raised (wind-up pose)
+                this.armR.rotation.x = THREE.MathUtils.lerp(this.armR.rotation.x, -1.2, 0.15);
+            }
+
+            // Left arm stays relatively still
+            this.armL.rotation.x = THREE.MathUtils.lerp(this.armL.rotation.x, -0.3, 0.1);
+
+            // Legs stay still while chopping
+            this.legL.rotation.x = THREE.MathUtils.lerp(this.legL.rotation.x, 0, 0.1);
+            this.legR.rotation.x = THREE.MathUtils.lerp(this.legR.rotation.x, 0, 0.1);
+            this.modelPivot.position.y = THREE.MathUtils.lerp(this.modelPivot.position.y, 0, 0.1);
+
+        } else if (isMoving && player.onGround) {
             const walkCycle = this.time * 10;
             this.legL.rotation.x = Math.sin(walkCycle) * 0.8;
             this.legR.rotation.x = Math.sin(walkCycle + Math.PI) * 0.8;
