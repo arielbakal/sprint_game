@@ -39,7 +39,7 @@ export default class InputHandler {
                 this._updateHeldToolVisual();
             }
             // ESC to exit pointer lock (browser handles this, we just update UI in pointerlockchange)
-            if (k === 'escape' || k === ' ') {
+            if (k === 'escape') {
                 if (document.pointerLockElement) document.exitPointerLock();
                 const d = document.getElementById('dialog-box');
                 if (d && d.style.display === 'flex') {
@@ -178,7 +178,7 @@ export default class InputHandler {
                 } else {
                     // TPS: mouse up = orbit higher
                     state.player.cameraAngle.y += e.movementY * state.sensitivity;
-                    state.player.cameraAngle.y = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, state.player.cameraAngle.y));
+                    state.player.cameraAngle.y = Math.max(-0.3, Math.min(1.5, state.player.cameraAngle.y));
                 }
             } else {
                 // Update custom cursor position

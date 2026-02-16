@@ -313,7 +313,7 @@ export default class PlayerController {
         // Clamp vertical angle
         if (player.cameraMode !== 'first') {
             // Restrict for TPS
-            ca.y = Math.max(0.1, Math.min(1.4, ca.y));
+            ca.y = Math.max(-0.3, Math.min(1.5, ca.y));
         }
 
         if (player.cameraMode === 'first') {
