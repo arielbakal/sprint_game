@@ -3,8 +3,9 @@
 // =====================================================
 
 import {
-    BOAT_MAX_SPEED, BOAT_ACCELERATION, BOAT_BRAKE, BOAT_REVERSE_FACTOR,
-    BOAT_DRAG, BOAT_MIN_SPEED, BOAT_COLLISION_RADIUS, BOAT_PROXIMITY_RANGE,
+    BOAT_BASE_MAX_SPEED, BOAT_BASE_ACCELERATION, BOAT_BASE_BRAKE, BOAT_BASE_TURN_SPEED,
+    BOAT_BASE_DRAG, BOAT_BASE_HEALTH,
+    BOAT_REVERSE_FACTOR, BOAT_MIN_SPEED, BOAT_COLLISION_RADIUS, BOAT_PROXIMITY_RANGE,
     BOAT_DECK_Y_OFFSET, BOAT_PLAYER_Y_OFFSET,
     BOARDING_WALK_SPEED, BOARDING_HOP_SPEED, BOARDING_SETTLE_SPEED,
     BOARDING_HOP_HEIGHT, BOARDING_SIDE_DIST, CAT_BOARDING_DELAY
@@ -129,6 +130,9 @@ export default class BoatSystem {
     showBoatHUD(show) {
         const hint = document.getElementById('boat-nav-hint');
         if (hint) hint.style.display = show ? 'block' : 'none';
+
+        const statsPan = document.getElementById('boat-stats');
+        if (statsPan) statsPan.style.display = show ? 'block' : 'none';
     }
 
     updateBoardingAnimation(dt, context) {
@@ -329,21 +333,75 @@ export default class BoatSystem {
         const boat = state.activeBoat;
         if (!boat) return;
 
+        // Initialize stats if missing (backward compatibility)
+        const defaults = {
+            currentSpeed: state.boatSpeed || 0,
+            maxSpeed: BOAT_BASE_MAX_SPEED,
+            acceleration: BOAT_BASE_ACCELERATION,
+            turnSpeed: BOAT_BASE_TURN_SPEED,
+            brake: BOAT_BASE_BRAKE,
+            drag: BOAT_BASE_DRAG,
+            maxHealth: BOAT_BASE_HEALTH,
+            health: BOAT_BASE_HEALTH
+        };
+
+        if (!boat.userData.stats) {
+            console.warn("BoatSystem: Stats missing, initializing defaults");
+            boat.userData.stats = { ...defaults };
+        } else {
+            // Fill missing keys if any (repair corrupt stats)
+            for (const key in defaults) {
+                if (boat.userData.stats[key] === undefined) {
+                    boat.userData.stats[key] = defaults[key];
+                }
+            }
+        }
+        const stats = boat.userData.stats;
+
+        // Defensive checks for NaN
+        if (isNaN(stats.currentSpeed)) {
+            console.error("BoatSystem: currentSpeed is NaN, resetting to 0");
+            stats.currentSpeed = 0;
+        }
+        if (isNaN(stats.maxSpeed) || stats.maxSpeed <= 0) {
+            console.error("BoatSystem: maxSpeed invalid, resetting to base");
+            stats.maxSpeed = BOAT_BASE_MAX_SPEED;
+        }
+        if (isNaN(state.boatRotation)) {
+            console.error("BoatSystem: boatRotation is NaN, resetting");
+            state.boatRotation = boat.rotation.y || 0;
+        }
+
+        state.boatSpeed = stats.currentSpeed; // Sync state for other systems checking it
+
         // Steering
-        const speedFactor = Math.min(Math.abs(state.boatSpeed) / BOAT_MAX_SPEED, 1);
-        const turnRate = 0.02 * (0.3 + speedFactor * 0.7);
+        // Turn rate depends on speed ratio + base turn speed
+        const speedRatio = Math.min(Math.abs(stats.currentSpeed) / stats.maxSpeed, 1);
+
+        const turnRate = stats.turnSpeed * (0.3 + speedRatio * 0.7);
+
         if (state.inputs.a) state.boatRotation += turnRate;
         if (state.inputs.d) state.boatRotation -= turnRate;
 
         // Acceleration
         if (state.inputs.w) {
-            state.boatSpeed = Math.min(state.boatSpeed + BOAT_ACCELERATION, BOAT_MAX_SPEED);
+            stats.currentSpeed = Math.min(stats.currentSpeed + stats.acceleration, stats.maxSpeed);
         } else if (state.inputs.s) {
-            state.boatSpeed = Math.max(state.boatSpeed - BOAT_BRAKE, -BOAT_MAX_SPEED * BOAT_REVERSE_FACTOR);
+            stats.currentSpeed = Math.max(stats.currentSpeed - stats.brake, -stats.maxSpeed * BOAT_REVERSE_FACTOR);
         } else {
-            state.boatSpeed *= BOAT_DRAG;
-            if (Math.abs(state.boatSpeed) < BOAT_MIN_SPEED) state.boatSpeed = 0;
+            stats.currentSpeed *= stats.drag;
+            if (Math.abs(stats.currentSpeed) < BOAT_MIN_SPEED) stats.currentSpeed = 0;
         }
+
+        // Update state export for camera/etc
+        state.boatSpeed = stats.currentSpeed;
+
+        // Update UI
+        const speedVal = document.getElementById('boat-speed-val');
+        const healthVal = document.getElementById('boat-health-val');
+        // Convert to "knots" (arbitrary logical scale for display)
+        if (speedVal) speedVal.textContent = (Math.abs(stats.currentSpeed) * 100).toFixed(1);
+        if (healthVal) healthVal.textContent = Math.ceil(stats.health);
 
         const forward = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
         const newX = boat.position.x + forward.x * state.boatSpeed;
@@ -362,6 +420,7 @@ export default class BoatSystem {
                 boat.position.z = island.center.z + Math.sin(angle) * minDist;
                 if (Math.abs(state.boatSpeed) > 0.02) audio.pop();
                 state.boatSpeed *= -0.15;
+                stats.currentSpeed = state.boatSpeed; // Sync back to stats
                 blocked = true;
                 break;
             }
@@ -379,7 +438,7 @@ export default class BoatSystem {
 
         // Lean
         const turnInput = (state.inputs.a ? 1 : 0) - (state.inputs.d ? 1 : 0);
-        const targetLean = turnInput * speedFactor * -0.08;
+        const targetLean = turnInput * speedRatio * -0.08;
         boat.rotation.z = boat.rotation.z * 0.9 + targetLean * 0.1;
         boat.rotation.x = Math.sin(t * 1.0 + 0.5) * 0.025 + state.boatSpeed * 0.1;
 
@@ -429,12 +488,24 @@ export default class BoatSystem {
         const ca = state.player.cameraAngle;
         ca.y = Math.max(0.1, Math.min(1.4, ca.y));
         const dist = 8.0;
+
+        // Defensive check for camera
+        if (isNaN(boat.position.x) || isNaN(boat.position.y) || isNaN(boat.position.z)) {
+            console.error("BoatSystem: Boat position is NaN, cannot update camera");
+            return;
+        }
+
         const camX = boat.position.x + dist * Math.sin(ca.x) * Math.cos(ca.y);
         const camZ = boat.position.z + dist * Math.cos(ca.x) * Math.cos(ca.y);
         const camY = boat.position.y + dist * Math.sin(ca.y) + 1.5;
         const desiredPos = new THREE.Vector3(camX, camY, camZ);
-        camera.position.lerp(desiredPos, 0.08);
-        camera.lookAt(boat.position.x, boat.position.y + 0.5, boat.position.z);
+
+        if (!isNaN(camX) && !isNaN(camY) && !isNaN(camZ)) {
+            camera.position.lerp(desiredPos, 0.08);
+            camera.lookAt(boat.position.x, boat.position.y + 0.5, boat.position.z);
+        } else {
+            console.error("BoatSystem: Camera target is NaN");
+        }
 
         // Wake particles
         if (Math.abs(state.boatSpeed) > 0.02 && Math.random() < 0.3) {

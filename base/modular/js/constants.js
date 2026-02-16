@@ -33,9 +33,9 @@ export const PLACE_RANGE = 12.0;       // placement distance
 export const WATER_PLACE_RANGE = 15.0; // log placement on water distance
 
 // Boat
-export const BOAT_MAX_SPEED = 0.12;
-export const BOAT_ACCELERATION = 0.003;
-export const BOAT_BRAKE = 0.004;
+export const BOAT_MAX_SPEED = 0.12; // Legacy, kept for reference
+export const BOAT_ACCELERATION = 0.003; // Legacy
+export const BOAT_BRAKE = 0.004; // Legacy
 export const BOAT_REVERSE_FACTOR = 0.3;
 export const BOAT_DRAG = 0.985;
 export const BOAT_MIN_SPEED = 0.001;
@@ -45,6 +45,14 @@ export const BOAT_LOG_CLUSTER_SIZE = 4;
 export const BOAT_LOG_CLUSTER_RADIUS = 5.0;
 export const BOAT_DECK_Y_OFFSET = -1.30;
 export const BOAT_PLAYER_Y_OFFSET = -1.20;
+
+// Boat Base Stats (Dynamic System)
+export const BOAT_BASE_HEALTH = 100;
+export const BOAT_BASE_MAX_SPEED = 0.12;
+export const BOAT_BASE_ACCELERATION = 0.003;
+export const BOAT_BASE_TURN_SPEED = 0.02;
+export const BOAT_BASE_DRAG = 0.985;
+export const BOAT_BASE_BRAKE = 0.004;
 
 // Boarding animation
 export const BOARDING_WALK_SPEED = 2.5;
