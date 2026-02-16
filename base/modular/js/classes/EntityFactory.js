@@ -2,6 +2,11 @@
 // ENTITY FACTORY CLASS
 // =====================================================
 
+import {
+    BOAT_BASE_HEALTH, BOAT_BASE_MAX_SPEED, BOAT_BASE_ACCELERATION,
+    BOAT_BASE_TURN_SPEED, BOAT_BASE_DRAG, BOAT_BASE_BRAKE
+} from '../constants.js';
+
 export default class EntityFactory {
     constructor(world, state) {
         this.world = world;
@@ -757,7 +762,21 @@ export default class EntityFactory {
         });
 
         g.position.set(x, 0, z);
-        g.userData = { type: 'boat', color: color, radius: 2.5 };
+        g.userData = {
+            type: 'boat',
+            color: color,
+            radius: 2.5,
+            stats: {
+                health: BOAT_BASE_HEALTH,
+                maxHealth: BOAT_BASE_HEALTH,
+                currentSpeed: 0,
+                maxSpeed: BOAT_BASE_MAX_SPEED,
+                acceleration: BOAT_BASE_ACCELERATION,
+                turnSpeed: BOAT_BASE_TURN_SPEED,
+                drag: BOAT_BASE_DRAG,
+                brake: BOAT_BASE_BRAKE
+            }
+        };
         return g;
     }
 
