@@ -408,7 +408,6 @@ export default class EntityFactory {
             moveSpeed: 0.03, hopOffset: Math.random() * 100,
             color: dna.color, bubble: null, style: dna, targetScale: dna.scale, cooldown: 0
         };
-        this.state.obstacles.push(g);
         return g;
     }
 
@@ -426,7 +425,6 @@ export default class EntityFactory {
         g.add(body, crown, e1, e2);
         g.position.set(x, this.O_Y + 0.3, z);
         g.userData = { type: 'chief', name: 'Chief Ruru', loreFile: 'data/chief_lore.txt', canChat: true, radius: 0.6, moveSpeed: 0.045, color: color, fleeTimer: 0 };
-        this.state.obstacles.push(g);
         return g;
     }
 

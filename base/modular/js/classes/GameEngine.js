@@ -476,7 +476,7 @@ export default class GameEngine {
 
         // Spawn companion cat near player
         this.playerCat = this.factory.createCat(1.5, 1.5);
-        this.playerCat.scale.set(0.3, 0.3, 0.3);
+        this.playerCat.scale.set(0.15, 0.15, 0.15);
         this.state.entities.push(this.playerCat);
         this.world.add(this.playerCat);
 
