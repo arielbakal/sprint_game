@@ -468,7 +468,7 @@ export default class EntityFactory {
         g.add(log);
         g.position.set(x, this.O_Y, z);
         g.scale.set(0, 0, 0);
-        g.userData = { type: 'log', color: palette.trunk, autoPickup: true };
+        g.userData = { type: 'log', color: palette.trunk, autoPickup: true, onLand: true };
         return g;
     }
 

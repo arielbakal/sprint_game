@@ -48,7 +48,7 @@ export default class GameEngine {
         this.boatSystem = new BoatSystem(this.ui);
         this.chopSystem = new ChopSystem(this.ui);
         this.mineSystem = new MineSystem(this.ui);
-        this.inventorySystem = new InventoryManager(this);
+        this.inventorySystem = new InventoryManager(this.state, this.audio, this.ui);
         this.entityAISystem = new EntityAISystem();
         this.catAI = new CatAI();
         this.particleSystem = new ParticleSystem();
@@ -705,7 +705,7 @@ export default class GameEngine {
                     e.position.y = Math.sin(t * 1.5 + e.position.x) * 0.1;
                     e.rotation.z = Math.sin(t * 0.8 + e.position.z) * 0.02;
                 }
-                if (e.userData.type === 'log') {
+                if (e.userData.type === 'log' && !e.userData.onLand) {
                     e.position.y = Math.sin(t * 2 + e.position.x * 0.5) * 0.08 - 0.1;
                     e.rotation.z = Math.PI / 2 + Math.sin(t * 1.2 + e.position.z) * 0.05;
                 }
