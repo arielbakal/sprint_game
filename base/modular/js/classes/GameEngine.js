@@ -65,6 +65,12 @@ export default class GameEngine {
         this.network = new NetworkManager();
         this.remotePlayers = new RemotePlayerManager(this.world);
         this._setupNetworkCallbacks();
+        this._lastSelectedSlot = null; // track slot changes for network sync
+
+        // Broadcast inventory when InventoryManager picks up items
+        this.inventorySystem.onInventoryChanged = () => {
+            this._broadcastInventory();
+        };
 
         this.chatManager = new ChatManager(this); // Initialize AFTER setupUI
         this.input = new InputHandler(this);
@@ -131,6 +137,7 @@ export default class GameEngine {
             if (existingIdx !== -1) {
                 this.state.inventory[existingIdx].count = (this.state.inventory[existingIdx].count || 1) + 1;
                 this.updateInventory();
+                this._broadcastInventory();
                 return true;
             }
         }
@@ -138,6 +145,7 @@ export default class GameEngine {
         if (emptyIdx !== -1) {
             this.state.inventory[emptyIdx] = { type, color, style, age, count: 1 };
             this.updateInventory();
+            this._broadcastInventory();
             return true;
         }
         return false;
@@ -166,6 +174,8 @@ export default class GameEngine {
                 }
             }
         });
+        // Broadcast inventory changes to multiplayer
+        this._broadcastInventory();
     }
 
     resetWorld() {
@@ -586,6 +596,10 @@ export default class GameEngine {
         this.network.onWorldEvent = (event) => {
             this._handleRemoteWorldEvent(event);
         };
+
+        this.network.onInventoryUpdate = (id, data) => {
+            this.remotePlayers.updateInventory(id, data);
+        };
     }
 
     async connectMultiplayer(url) {
@@ -674,6 +688,13 @@ export default class GameEngine {
         this.network.sendWorldEvent({ action, x, z });
     }
 
+    /**
+     * Broadcast current inventory state to other players
+     */
+    _broadcastInventory() {
+        this.network.sendInventoryUpdate(this.state.inventory, this.state.selectedSlot);
+    }
+
     animate(t) {
         requestAnimationFrame(this.animate);
         t *= 0.001;
@@ -755,6 +776,12 @@ export default class GameEngine {
             // --- Multiplayer: send state & interpolate remote players ---
             this.network.sendPlayerState(state);
             this.remotePlayers.update(dt);
+
+            // Detect selectedSlot change and broadcast inventory
+            if (this._lastSelectedSlot !== state.selectedSlot) {
+                this._lastSelectedSlot = state.selectedSlot;
+                this._broadcastInventory();
+            }
         }
         this.world.render();
     }

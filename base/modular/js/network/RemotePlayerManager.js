@@ -32,7 +32,7 @@ export default class RemotePlayerManager {
         const colors = this._playerColors(id);
         const matBody = new THREE.MeshToonMaterial({ color: colors.body });
         const matLimb = new THREE.MeshToonMaterial({ color: colors.limb });
-        const matEye  = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const matEye = new THREE.MeshBasicMaterial({ color: 0xffffff });
         const matPupil = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
         const group = new THREE.Group();
@@ -99,7 +99,13 @@ export default class RemotePlayerManager {
         sprite.scale.set(1.5, 0.4, 1);
         group.add(sprite);
 
-        return { group, pivot, legL, legR, armL, armR };
+        // Held-item container (attached to right arm at hand position)
+        const heldItemContainer = new THREE.Group();
+        heldItemContainer.position.set(0, -0.4, 0);
+        heldItemContainer.visible = false;
+        armR.add(heldItemContainer);
+
+        return { group, pivot, legL, legR, armL, armR, heldItemContainer, currentHeldType: null };
     }
 
     /**
@@ -122,8 +128,15 @@ export default class RemotePlayerManager {
             currentRot: data.rotation || 0,
             time: 0,
             isOnBoat: false,
-            activeAction: null
+            activeAction: null,
+            inventory: data.inventory || null,
+            selectedSlot: data.selectedSlot ?? null
         });
+
+        // If existing player already had inventory, show held item
+        if (data.inventory) {
+            this._updateHeldItem(id);
+        }
 
         console.log(`[Remote] Player ${id} added`);
     }
@@ -153,6 +166,124 @@ export default class RemotePlayerManager {
         }
         p.isOnBoat = data.isOnBoat || false;
         p.activeAction = data.activeAction || null;
+    }
+
+    /**
+     * Update a remote player's inventory data and held-item visual
+     */
+    updateInventory(id, data) {
+        const p = this.players.get(id);
+        if (!p) return;
+        p.inventory = data.inventory || null;
+        p.selectedSlot = data.selectedSlot ?? null;
+        this._updateHeldItem(id);
+    }
+
+    /**
+     * Update the held-item mesh based on the player's selected inventory slot
+     */
+    _updateHeldItem(id) {
+        const p = this.players.get(id);
+        if (!p || !p.heldItemContainer) return;
+
+        const slot = p.selectedSlot;
+        const inv = p.inventory;
+        if (slot === null || slot === undefined || !inv || !inv[slot]) {
+            p.heldItemContainer.visible = false;
+            p.currentHeldType = null;
+            return;
+        }
+
+        const item = inv[slot];
+        const itemType = item.type;
+        const color = typeof item.color === 'number' ? item.color : 0xffffff;
+
+        // Only rebuild mesh if the item type changed
+        if (p.currentHeldType !== itemType) {
+            while (p.heldItemContainer.children.length) {
+                p.heldItemContainer.remove(p.heldItemContainer.children[0]);
+            }
+            const model = this._buildHeldItemModel(itemType, color);
+            p.heldItemContainer.add(model);
+            p.currentHeldType = itemType;
+        } else if (itemType !== 'axe' && itemType !== 'pickaxe') {
+            // Same type, update color for non-tool items
+            p.heldItemContainer.traverse(c => {
+                if (c.material) c.material.color.setHex(color);
+            });
+        }
+
+        p.heldItemContainer.visible = true;
+    }
+
+    /**
+     * Build a held-item 3D model matching the EntityFactory designs
+     */
+    _buildHeldItemModel(type, color) {
+        const g = new THREE.Group();
+        switch (type) {
+            case 'axe': {
+                const woodMat = new THREE.MeshToonMaterial({ color: 0x5d4037 });
+                const metalMat = new THREE.MeshToonMaterial({ color: 0x78909c });
+                const edgeMat = new THREE.MeshToonMaterial({ color: 0xeeeeee });
+                const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.015, 0.5, 6), woodMat);
+                g.add(handle);
+                const headBase = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.075, 0.1), metalMat);
+                headBase.position.y = 0.2;
+                g.add(headBase);
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.0075, 0.15, 0.125), metalMat);
+                blade.position.set(0, 0.2, 0.0875);
+                blade.rotation.x = Math.PI / 8;
+                g.add(blade);
+                const edge = new THREE.Mesh(new THREE.BoxGeometry(0.0025, 0.1625, 0.0125), edgeMat);
+                edge.position.set(0, 0.2, 0.15);
+                edge.rotation.x = Math.PI / 8;
+                g.add(edge);
+                g.rotation.set(Math.PI, Math.PI, -Math.PI / 4);
+                break;
+            }
+            case 'pickaxe': {
+                const woodMat = new THREE.MeshToonMaterial({ color: 0x5d4037 });
+                const metalMat = new THREE.MeshToonMaterial({ color: 0x555555 });
+                const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.015, 0.5, 6), woodMat);
+                g.add(handle);
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.04, 0.04), metalMat);
+                head.position.y = 0.2;
+                g.add(head);
+                const tipL = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.15, 4), metalMat);
+                tipL.rotation.z = Math.PI / 2 + 0.3;
+                tipL.position.set(-0.15, 0.16, 0);
+                g.add(tipL);
+                const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.15, 4), metalMat);
+                tipR.rotation.z = -Math.PI / 2 - 0.3;
+                tipR.position.set(0.15, 0.16, 0);
+                g.add(tipR);
+                g.rotation.set(Math.PI, Math.PI, -Math.PI / 4);
+                break;
+            }
+            case 'wood': {
+                const mat = new THREE.MeshToonMaterial({ color });
+                g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 6), mat));
+                g.rotation.set(0, 0, -Math.PI / 4);
+                break;
+            }
+            case 'rock': {
+                const mat = new THREE.MeshToonMaterial({ color });
+                g.add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.1), mat));
+                break;
+            }
+            case 'food': {
+                const mat = new THREE.MeshToonMaterial({ color });
+                g.add(new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 4), mat));
+                break;
+            }
+            default: {
+                const mat = new THREE.MeshToonMaterial({ color });
+                g.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), mat));
+                break;
+            }
+        }
+        return g;
     }
 
     /**

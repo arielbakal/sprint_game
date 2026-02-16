@@ -16,6 +16,7 @@ export default class NetworkManager {
         this.onPlayerUpdate = null;       // callback(id, data)
         this.onWorldEvent = null;         // callback(event)
         this.onWelcome = null;            // callback(data) - receives seed, playerCount
+        this.onInventoryUpdate = null;    // callback(id, data)
         this._sendQueue = [];
         this._lastSendTime = 0;
         this.SEND_RATE = 1000 / 20;       // 20 ticks/sec
@@ -99,6 +100,28 @@ export default class NetworkManager {
         }));
     }
 
+    /**
+     * Broadcast inventory snapshot to other players
+     */
+    sendInventoryUpdate(inventory, selectedSlot) {
+        if (!this.connected) return;
+        // Serialize inventory: convert THREE.Color to hex integers for transmission
+        const serialized = inventory.map(item => {
+            if (!item) return null;
+            return {
+                type: item.type,
+                color: item.color ? item.color.getHex() : 0xffffff,
+                count: item.count || 1,
+                age: item.age || 0
+            };
+        });
+        this._send(MessageProtocol.encode({
+            type: 'inventory_update',
+            inventory: serialized,
+            selectedSlot: selectedSlot
+        }));
+    }
+
     _send(data) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(data);
@@ -143,6 +166,10 @@ export default class NetworkManager {
 
             case 'world_event':
                 if (this.onWorldEvent) this.onWorldEvent(msg);
+                break;
+
+            case 'inventory_update':
+                if (this.onInventoryUpdate) this.onInventoryUpdate(msg.id, msg);
                 break;
         }
     }

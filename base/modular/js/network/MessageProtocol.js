@@ -32,14 +32,15 @@ export default class MessageProtocol {
     // --- Message type constants ---
     static get TYPES() {
         return {
-            WELCOME:       'welcome',
-            PLAYER_JOIN:   'player_join',
-            PLAYER_LEAVE:  'player_leave',
-            PLAYER_STATE:  'player_state',
-            WORLD_EVENT:   'world_event',
-            CHAT:          'chat',
-            ENTITY_SPAWN:  'entity_spawn',
-            ENTITY_REMOVE: 'entity_remove'
+            WELCOME: 'welcome',
+            PLAYER_JOIN: 'player_join',
+            PLAYER_LEAVE: 'player_leave',
+            PLAYER_STATE: 'player_state',
+            WORLD_EVENT: 'world_event',
+            CHAT: 'chat',
+            ENTITY_SPAWN: 'entity_spawn',
+            ENTITY_REMOVE: 'entity_remove',
+            INVENTORY_UPDATE: 'inventory_update'
         };
     }
 }
