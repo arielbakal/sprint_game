@@ -13,6 +13,7 @@ export default class InventoryManager {
         this.state = state;
         this.audio = audio;
         this.ui = ui;
+        this.onInventoryChanged = null; // callback() - fired when inventory changes
     }
 
     addToInventory(type, color, style, age = 0) {
@@ -24,6 +25,7 @@ export default class InventoryManager {
             if (existingIdx !== -1) {
                 this.state.inventory[existingIdx].count = (this.state.inventory[existingIdx].count || 1) + 1;
                 this.renderInventory();
+                this.onInventoryChanged?.();
                 return true;
             }
         }
@@ -31,6 +33,7 @@ export default class InventoryManager {
         if (emptyIdx !== -1) {
             this.state.inventory[emptyIdx] = { type, color, style, age, count: 1 };
             this.renderInventory();
+            this.onInventoryChanged?.();
             return true;
         }
         return false;
