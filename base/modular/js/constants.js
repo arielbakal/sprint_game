@@ -54,6 +54,13 @@ export const BOAT_BASE_TURN_SPEED = 0.02;
 export const BOAT_BASE_DRAG = 0.985;
 export const BOAT_BASE_BRAKE = 0.004;
 
+// Boat Durability
+export const BOAT_COLLISION_DAMAGE_MIN = 5;
+export const BOAT_COLLISION_DAMAGE_MAX = 25;
+export const BOAT_WEAR_PER_SECOND = 0.2; // 1% every 5 seconds of full speed
+export const BOAT_CRITICAL_THRESHOLD = 30; // 30% health = smoke
+export const BOAT_BROKEN_SPEED_FACTOR = 0.2; // 20% max speed when broken
+
 // Boarding animation
 export const BOARDING_WALK_SPEED = 2.5;
 export const BOARDING_HOP_SPEED = 2.8;

@@ -5,6 +5,8 @@
 import {
     BOAT_BASE_MAX_SPEED, BOAT_BASE_ACCELERATION, BOAT_BASE_BRAKE, BOAT_BASE_TURN_SPEED,
     BOAT_BASE_DRAG, BOAT_BASE_HEALTH,
+    BOAT_COLLISION_DAMAGE_MIN, BOAT_COLLISION_DAMAGE_MAX,
+    BOAT_WEAR_PER_SECOND, BOAT_CRITICAL_THRESHOLD, BOAT_BROKEN_SPEED_FACTOR,
     BOAT_REVERSE_FACTOR, BOAT_MIN_SPEED, BOAT_COLLISION_RADIUS, BOAT_PROXIMITY_RANGE,
     BOAT_DECK_Y_OFFSET, BOAT_PLAYER_Y_OFFSET,
     BOARDING_WALK_SPEED, BOARDING_HOP_SPEED, BOARDING_SETTLE_SPEED,
@@ -377,6 +379,11 @@ export default class BoatSystem {
         // Steering
         // Turn rate depends on speed ratio + base turn speed
         const speedRatio = Math.min(Math.abs(stats.currentSpeed) / stats.maxSpeed, 1);
+        const isBroken = stats.health <= 0;
+
+        // Limp mode if broken
+        let effectiveMaxSpeed = stats.maxSpeed;
+        if (isBroken) effectiveMaxSpeed *= BOAT_BROKEN_SPEED_FACTOR;
 
         const turnRate = stats.turnSpeed * (0.3 + speedRatio * 0.7);
 
@@ -385,12 +392,18 @@ export default class BoatSystem {
 
         // Acceleration
         if (state.inputs.w) {
-            stats.currentSpeed = Math.min(stats.currentSpeed + stats.acceleration, stats.maxSpeed);
+            stats.currentSpeed = Math.min(stats.currentSpeed + stats.acceleration, effectiveMaxSpeed);
         } else if (state.inputs.s) {
-            stats.currentSpeed = Math.max(stats.currentSpeed - stats.brake, -stats.maxSpeed * BOAT_REVERSE_FACTOR);
+            stats.currentSpeed = Math.max(stats.currentSpeed - stats.brake, -effectiveMaxSpeed * BOAT_REVERSE_FACTOR);
         } else {
             stats.currentSpeed *= stats.drag;
             if (Math.abs(stats.currentSpeed) < BOAT_MIN_SPEED) stats.currentSpeed = 0;
+        }
+
+        // Wear and Tear
+        if (Math.abs(stats.currentSpeed) > 0.01) {
+            const wear = BOAT_WEAR_PER_SECOND * dt * speedRatio;
+            stats.health = Math.max(0, stats.health - wear);
         }
 
         // Update state export for camera/etc
@@ -401,7 +414,19 @@ export default class BoatSystem {
         const healthVal = document.getElementById('boat-health-val');
         // Convert to "knots" (arbitrary logical scale for display)
         if (speedVal) speedVal.textContent = (Math.abs(stats.currentSpeed) * 100).toFixed(1);
-        if (healthVal) healthVal.textContent = Math.ceil(stats.health);
+        if (healthVal) {
+            healthVal.textContent = Math.ceil(stats.health);
+            healthVal.style.color = (stats.health < BOAT_CRITICAL_THRESHOLD) ? '#ff4444' : '#ffffff';
+        }
+
+        // Critical Smoke Effect
+        if (stats.health < BOAT_CRITICAL_THRESHOLD && Math.random() < 0.1) {
+            const smokePos = boat.position.clone();
+            smokePos.y += 0.5;
+            smokePos.x += (Math.random() - 0.5) * 1.0;
+            smokePos.z += (Math.random() - 0.5) * 1.0;
+            factory.createParticle(smokePos, new THREE.Color(0x333333), 1.5 + Math.random());
+        }
 
         const forward = new THREE.Vector3(-Math.sin(state.boatRotation), 0, -Math.cos(state.boatRotation));
         const newX = boat.position.x + forward.x * state.boatSpeed;
@@ -418,8 +443,18 @@ export default class BoatSystem {
                 const angle = Math.atan2(dz, dx);
                 boat.position.x = island.center.x + Math.cos(angle) * minDist;
                 boat.position.z = island.center.z + Math.sin(angle) * minDist;
-                if (Math.abs(state.boatSpeed) > 0.02) audio.pop();
-                state.boatSpeed *= -0.15;
+
+                // Collision Damage
+                if (Math.abs(state.boatSpeed) > 0.02) {
+                    audio.pop();
+                    const impactRatio = Math.min(Math.abs(state.boatSpeed) / stats.maxSpeed, 1);
+                    const damage = BOAT_COLLISION_DAMAGE_MIN + (BOAT_COLLISION_DAMAGE_MAX - BOAT_COLLISION_DAMAGE_MIN) * impactRatio;
+                    stats.health = Math.max(0, stats.health - damage);
+                    state.boatSpeed *= -0.15; // Bounce
+                } else {
+                    state.boatSpeed = 0;
+                }
+
                 stats.currentSpeed = state.boatSpeed; // Sync back to stats
                 blocked = true;
                 break;
