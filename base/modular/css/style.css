@@ -695,6 +695,16 @@ input[type=range] {
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
 }
 
+/* Pickaxe icon for inventory */
+.icon-pickaxe {
+    width: 6px;
+    height: 18px;
+    background: linear-gradient(to bottom, #b0bec5 60%, #5d4037 60%);
+    border: 2px solid rgba(0, 0, 0, 0.4);
+    border-radius: 2px;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
 /* =====================================================
    MULTIPLAYER PANEL
    ===================================================== */

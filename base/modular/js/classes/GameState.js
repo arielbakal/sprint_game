@@ -46,16 +46,12 @@ export default class GameState {
         this.chopProgress = 0;            // hits on current tree (0-5)
         this.isChopping = false;          // holding click on tree
         this.chopTimer = 0;              // time since last chop hit
-        
+
         this.isMining = false;            // holding click on rock
         this.mineProgress = 0;            // hits on current rock
         this.mineTimer = 0;
-        
-        this.lastInteractTime = 0;
 
-        // Tools
-        this.heldAxe = null;             // axe entity being held
-        this.heldPickaxe = null;         // pickaxe entity being held
+        this.lastInteractTime = 0;
 
         // Mouse
         this.mouseX = 0;

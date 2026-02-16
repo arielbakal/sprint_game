@@ -76,7 +76,7 @@ export const MAX_FOODS = 30;            // population cap to prevent food overlo
 
 // Inventory
 export const INVENTORY_SLOTS = 8;
-export const NON_STACKABLE_TYPES = ['creature', 'egg'];
+export const NON_STACKABLE_TYPES = ['creature', 'egg', 'axe', 'pickaxe'];
 
 // Particles
 export const PARTICLE_GRAVITY = 0.002;

@@ -12,6 +12,14 @@ export default class InputHandler {
         this.setupTouch();
     }
 
+    /** Returns the item type of the currently selected inventory slot, or null */
+    getSelectedType() {
+        const state = this.engine.state;
+        if (state.selectedSlot === null) return null;
+        const item = state.inventory[state.selectedSlot];
+        return item ? item.type : null;
+    }
+
     setupKeyboard() {
         const state = this.engine.state;
         const sfx = this.engine.audio;
@@ -28,6 +36,7 @@ export default class InputHandler {
                 if (state.selectedSlot === idx) { state.selectedSlot = null; sfx.select(); }
                 else if (state.inventory[idx]) { state.selectedSlot = idx; sfx.select(); }
                 this.engine.updateInventory();
+                this._updateHeldToolVisual();
             }
             // ESC to exit pointer lock (browser handles this, we just update UI in pointerlockchange)
             if (k === 'escape' || k === ' ') {
@@ -45,45 +54,14 @@ export default class InputHandler {
                 // If switching to first person, reset vertical angle for better view
                 if (state.player.cameraMode === 'first') state.player.cameraAngle.y = 0.0;
             }
-            // E to board/exit boat OR store/pick axe (mutually exclusive)
+            // E to pick up nearby tool OR board/exit boat
             if (k === 'e' && state.phase === 'playing' && !state.isBoardingBoat) {
-                if (state.isOnBoat) {
+                if (this._nearestTool) {
+                    this._pickupNearestTool();
+                } else if (state.isOnBoat) {
                     this.engine.disembarkBoat();
                 } else if (this.engine._nearestBoat) {
                     this.engine.boardBoat(this.engine._nearestBoat);
-                } else if (state.heldAxe) {
-                    // Store axe in inventory
-                    const stored = this.engine.addAxeToInventory();
-                    if (stored) {
-                        this.engine.audio.pickup();
-                        this.engine.playerController.holdItem(null);
-                        state.heldAxe = null;
-                    } else {
-                        this.engine.audio.pop();
-                    }
-                } else {
-                    // Pick axe from inventory
-                    const hadAxeInInventory = this.engine.hasAxeInInventory();
-                    if (hadAxeInInventory) {
-                        this.engine.pickAxeFromInventory();
-                        const newAxe = this.engine.factory.createAxe(this.engine.state.palette, state.player.pos.x, state.player.pos.z);
-                        newAxe.scale.set(1, 1, 1);
-                        state.heldAxe = newAxe;
-                        this.engine.playerController.holdItem(newAxe);
-                        this.engine.audio.pickup();
-                    } else {
-                        this.engine.audio.pop();
-                    }
-                }
-            }
-            // F to pick up/drop tools (Axe / Pickaxe) on the ground
-            if (k === 'f' && state.phase === 'playing' && !state.isOnBoat) {
-                if (state.heldAxe) {
-                    this.dropTool('axe');
-                } else if (state.heldPickaxe) {
-                    this.dropTool('pickaxe');
-                } else {
-                    this.tryPickupTool();
                 }
             }
         });
@@ -95,6 +73,77 @@ export default class InputHandler {
             if (k === 'd') state.inputs.d = false;
             if (k === ' ') state.inputs.space = false;
         });
+    }
+
+    /**
+     * Update the visual tool held in the player's hand based on selected inventory slot.
+     * Shows axe/pickaxe model when its slot is selected, hides otherwise.
+     */
+    _updateHeldToolVisual() {
+        const state = this.engine.state;
+        const type = this.getSelectedType();
+        const pc = this.engine.playerController;
+
+        if (type === 'axe' || type === 'pickaxe') {
+            // Create a visual tool to show in hand
+            if (!this._heldToolType || this._heldToolType !== type) {
+                let tool;
+                if (type === 'axe') {
+                    tool = this.engine.factory.createAxe(state.palette, 0, 0);
+                } else {
+                    tool = this.engine.factory.createPickaxe(state.palette, 0, 0);
+                }
+                // Remove from scene (we just want the mesh, not in the world)
+                this.engine.world.remove(tool);
+                // Factory creates at scale 0 (spawn animation) — reset for hand display
+                tool.scale.set(1, 1, 1);
+                tool.position.set(0, 0, 0);
+                tool.rotation.set(0, 0, 0);
+                pc.holdItem(tool);
+                this._heldToolType = type;
+            }
+        } else {
+            // Not a tool selected — clear held item
+            if (this._heldToolType) {
+                pc.holdItem(null);
+                this._heldToolType = null;
+            }
+        }
+    }
+
+    /**
+     * Pick up the nearest tool (axe/pickaxe) from the ground into inventory.
+     * Called when E key is pressed and _nearestTool is set.
+     */
+    _pickupNearestTool() {
+        const tool = this._nearestTool;
+        if (!tool) return;
+
+        const state = this.engine.state;
+        const world = this.engine.world;
+        const sfx = this.engine.audio;
+        const factory = this.engine.factory;
+
+        const success = this.engine.addToInventory(tool.userData.type, tool.userData.color || new THREE.Color(0x5d4037), null);
+        if (success) {
+            sfx.pickup();
+            // Particles
+            for (let i = 0; i < 15; i++) factory.createParticle(tool.position.clone(), tool.userData.color || new THREE.Color(0x5d4037), 1.0);
+            // Remove from world
+            const idx = state.entities.indexOf(tool);
+            if (idx > -1) state.entities.splice(idx, 1);
+            world.remove(tool);
+            // Auto-select the tool slot
+            const toolSlot = state.inventory.findIndex(item => item && item.type === tool.userData.type);
+            if (toolSlot !== -1) {
+                state.selectedSlot = toolSlot;
+                this.engine.updateInventory();
+                this._updateHeldToolVisual();
+            }
+            this._nearestTool = null;
+        } else {
+            sfx.pop();
+        }
     }
 
     setupMouse() {
@@ -143,6 +192,7 @@ export default class InputHandler {
             }
             this.engine.audio.select();
             this.engine.updateInventory();
+            this._updateHeldToolVisual();
         });
 
         // --- Pointer lock change handler ---
@@ -163,15 +213,17 @@ export default class InputHandler {
             if (!document.pointerLockElement) return;
             if (state.isOnBoat) return;
 
-            // Start chopping if interactionTarget is a choppable tree AND player has axe
-            if (state.interactionTarget && state.interactionTarget.userData.choppable && state.heldAxe) {
+            const selectedType = this.getSelectedType();
+
+            // Start chopping if interactionTarget is a choppable tree AND axe slot selected
+            if (state.interactionTarget && state.interactionTarget.userData.choppable && selectedType === 'axe') {
                 state.isChopping = true;
                 state.chopTimer = 0;
                 return;
             }
 
-            // Mining
-            if (state.heldPickaxe && state.interactionTarget) {
+            // Mining — pickaxe must be selected
+            if (selectedType === 'pickaxe' && state.interactionTarget) {
                 const type = state.interactionTarget.userData.type;
                 if (type === 'rock' || type === 'gold_rock') {
                     state.isMining = true;
@@ -202,108 +254,18 @@ export default class InputHandler {
 
         const playerPos = state.player.pos;
 
-        // If holding a tool, drop it? No, F drops tools. Left click uses them or interacts.
-        // Actually, let's allow dropping if not targeting anything? No, stick to F for drop.
-
-        // If holding an item in inventory, try to place it
+        // If holding a placeable item in inventory, try to place it
         if (state.selectedSlot !== null && state.inventory[state.selectedSlot]) {
-            this.handlePlace();
-            return;
+            const selectedType = this.getSelectedType();
+            // Don't place tools — they are "used" not "placed"
+            if (selectedType !== 'axe' && selectedType !== 'pickaxe') {
+                this.handlePlace();
+                return;
+            }
         }
 
         // Otherwise, try to pick up nearby items
         this.handlePickup();
-    }
-
-    dropTool(type) {
-        const state = this.engine.state;
-        const world = this.engine.world;
-        const sfx = this.engine.audio;
-
-        let tool = null;
-        if (type === 'axe') tool = state.heldAxe;
-        if (type === 'pickaxe') tool = state.heldPickaxe;
-
-        if (!tool) return;
-
-        // Detach
-        this.engine.playerController.holdItem(null);
-        if (type === 'axe') state.heldAxe = null;
-        if (type === 'pickaxe') state.heldPickaxe = null;
-
-        // Re-attach to world
-        tool.position.copy(state.player.pos);
-        tool.position.y = this.engine.factory.O_Y + 0.1;
-        tool.rotation.y = Math.random() * Math.PI * 2;
-
-        // Ensure scale is reset (holdItem modifies it? no, but just in case)
-        tool.scale.set(1, 1, 1);
-
-        world.add(tool);
-        state.entities.push(tool);
-        sfx.pickup();
-    }
-
-    tryPickupTool() {
-        const state = this.engine.state;
-        const world = this.engine.world;
-        const sfx = this.engine.audio;
-
-        // Find nearest tool
-        let nearest = null;
-        let nearestDist = 4;
-
-        for (const e of state.entities) {
-            if (e.userData.type !== 'axe' && e.userData.type !== 'pickaxe') continue;
-            const dist = state.player.pos.distanceTo(e.position);
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                nearest = e;
-            }
-        }
-
-        if (nearest) {
-            sfx.pickup();
-            // Remove from world
-            const idx = state.entities.indexOf(nearest);
-            if (idx > -1) state.entities.splice(idx, 1);
-            world.remove(nearest);
-
-            // Attach
-            if (nearest.userData.type === 'axe') state.heldAxe = nearest;
-            if (nearest.userData.type === 'pickaxe') state.heldPickaxe = nearest;
-
-            this.engine.playerController.holdItem(nearest);
-        }
-    }
-
-    tryPickupAxeFromGround() {
-        const state = this.engine.state;
-        const world = this.engine.world;
-        const sfx = this.engine.audio;
-
-        if (state.heldAxe) return;
-
-        let nearestAxe = null;
-        let nearestDist = 4;
-
-        for (const e of state.entities) {
-            if (e.userData.type !== 'axe') continue;
-            const dist = state.player.pos.distanceTo(e.position);
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                nearestAxe = e;
-            }
-        }
-
-        if (nearestAxe) {
-            sfx.pickup();
-            const idx = state.entities.indexOf(nearestAxe);
-            if (idx > -1) state.entities.splice(idx, 1);
-            world.remove(nearestAxe);
-            state.heldAxe = nearestAxe;
-            this.engine.playerController.holdItem(nearestAxe);
-        }
     }
 
     handlePlace() {
@@ -413,19 +375,26 @@ export default class InputHandler {
                 return;
             }
 
-            // Check for axe - pick up and hold in hand
-            if (root.userData.type === 'axe') {
-                // Check if player is close enough
+            // Axe / Pickaxe — pick up into inventory
+            if (root.userData.type === 'axe' || root.userData.type === 'pickaxe') {
                 const dist = state.player.pos.distanceTo(root.position);
                 if (dist < 4) {
-                    sfx.pickup();
-                    // Remove from world entities
-                    const idx = state.entities.indexOf(root);
-                    if (idx > -1) state.entities.splice(idx, 1);
-                    world.remove(root);
-                    // Attach to player's hand
-                    state.heldAxe = root;
-                    this.engine.playerController.holdItem(root);
+                    const success = this.engine.addToInventory(root.userData.type, root.userData.color || new THREE.Color(0x5d4037), null);
+                    if (success) {
+                        sfx.pickup();
+                        const idx = state.entities.indexOf(root);
+                        if (idx > -1) state.entities.splice(idx, 1);
+                        world.remove(root);
+                        // Auto-select the tool slot we just picked up
+                        const toolSlot = state.inventory.findIndex(item => item && item.type === root.userData.type);
+                        if (toolSlot !== -1) {
+                            state.selectedSlot = toolSlot;
+                            this.engine.updateInventory();
+                            this._updateHeldToolVisual();
+                        }
+                    } else {
+                        sfx.pop();
+                    }
                 }
                 return;
             }
@@ -572,18 +541,34 @@ export default class InputHandler {
 
         const playerPos = state.player.pos;
         const interactRange = 3.0;
+        const selectedType = this.getSelectedType();
 
-        // Find nearest choppable tree
+        // Find nearest interactable entity based on selected tool
         let nearest = null;
         let nearestDist = Infinity;
         for (const e of state.entities) {
-            if (!e.userData.choppable) continue;
-            const dx = e.position.x - playerPos.x;
-            const dz = e.position.z - playerPos.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < interactRange && dist < nearestDist) {
-                nearestDist = dist;
-                nearest = e;
+            // Choppable trees (when axe selected)
+            if (e.userData.choppable && selectedType === 'axe') {
+                const dx = e.position.x - playerPos.x;
+                const dz = e.position.z - playerPos.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < interactRange && dist < nearestDist) {
+                    nearestDist = dist;
+                    nearest = e;
+                }
+            }
+            // Minable rocks (when pickaxe selected)
+            if ((e.userData.type === 'rock' || e.userData.type === 'gold_rock') && selectedType === 'pickaxe') {
+                // Only highlight large-scale rocks (obstacle rocks), not small drops
+                if (state.obstacles.includes(e) || e.userData.type === 'gold_rock') {
+                    const dx = e.position.x - playerPos.x;
+                    const dz = e.position.z - playerPos.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    if (dist < interactRange && dist < nearestDist) {
+                        nearestDist = dist;
+                        nearest = e;
+                    }
+                }
             }
         }
 
@@ -601,30 +586,32 @@ export default class InputHandler {
             this.setHighlight(nearest, true);
         }
 
-        // Show/hide axe hint
+        // Find nearest tool on the ground for E-key pickup
+        this._nearestTool = null;
+        let nearestToolDist = 4.0; // pickup range
+        for (const e of state.entities) {
+            if (e.userData.type !== 'axe' && e.userData.type !== 'pickaxe') continue;
+            const dist = playerPos.distanceTo(e.position);
+            if (dist < nearestToolDist) {
+                nearestToolDist = dist;
+                this._nearestTool = e;
+            }
+        }
+
+        // Show/hide tool hint
         const axeHint = document.getElementById('axe-hint');
         if (axeHint) {
-            if (!state.heldAxe) {
-                let nearAxe = false;
-                let nearAxeInInventory = this.engine.hasAxeInInventory();
-                for (const e of state.entities) {
-                    if (e.userData.type !== 'axe') continue;
-                    const dist = state.player.pos.distanceTo(e.position);
-                    if (dist < 4) { nearAxe = true; break; }
-                }
-                if (nearAxeInInventory || nearAxe) {
-                    axeHint.style.display = 'block';
-                    if (nearAxeInInventory) {
-                        axeHint.textContent = 'Press E to take Axe from Inventory';
-                    } else {
-                        axeHint.textContent = 'Press F to pick up Axe';
-                    }
-                } else {
-                    axeHint.style.display = 'none';
-                }
-            } else {
+            if (this._nearestTool) {
                 axeHint.style.display = 'block';
-                axeHint.textContent = 'F to drop / E to store Axe';
+                axeHint.textContent = `Press E to pick up ${this._nearestTool.userData.type}`;
+            } else if (selectedType === 'axe' && nearest) {
+                axeHint.style.display = 'block';
+                axeHint.textContent = 'Click to chop tree';
+            } else if (selectedType === 'pickaxe' && nearest) {
+                axeHint.style.display = 'block';
+                axeHint.textContent = 'Click to mine';
+            } else {
+                axeHint.style.display = 'none';
             }
         }
     }
@@ -688,7 +675,8 @@ export default class InputHandler {
 
             // Short tap = interact
             if (dt < 250) {
-                if (state.interactionTarget && state.interactionTarget.userData.choppable && state.heldAxe) {
+                const selectedType = this.getSelectedType();
+                if (state.interactionTarget && state.interactionTarget.userData.choppable && selectedType === 'axe') {
                     state.isChopping = true;
                     state.chopTimer = 0;
                     setTimeout(() => { state.isChopping = false; }, 500);

@@ -143,34 +143,6 @@ export default class GameEngine {
         return false;
     }
 
-    addAxeToInventory() {
-        const state = this.state;
-        const emptyIdx = state.inventory.findIndex(item => item === null);
-        if (emptyIdx !== -1) {
-            state.inventory[emptyIdx] = { type: 'axe', color: new THREE.Color(0x5d4037), count: 1 };
-            this.updateInventory();
-            return true;
-        }
-        return false;
-    }
-
-    pickAxeFromInventory() {
-        const state = this.state;
-        for (let i = 0; i < 8; i++) {
-            if (state.inventory[i] && state.inventory[i].type === 'axe') {
-                state.inventory[i] = null;
-                this.updateInventory();
-                return i;
-            }
-        }
-        return null;
-    }
-
-    hasAxeInInventory() {
-        const state = this.state;
-        return state.inventory.some(item => item && item.type === 'axe');
-    }
-
     updateInventory() {
         const slots = document.querySelectorAll('.slot');
         slots.forEach((el, i) => {
@@ -184,7 +156,7 @@ export default class GameEngine {
                 if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
                 if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
                 if (it.type === 'wood' || it.type === 'log') d.style.background = d.style.color;
-                if (it.type === 'axe') d.style.background = d.style.color;
+                if (it.type === 'axe' || it.type === 'pickaxe') d.style.background = d.style.color;
                 el.appendChild(d);
                 if (it.count > 1) {
                     const countEl = document.createElement('span');
@@ -220,8 +192,6 @@ export default class GameEngine {
             this.state.debris.push(f);
         });
         this.state.entities = []; this.state.obstacles = []; this.state.foods = [];
-        this.state.heldAxe = null;
-        this.state.heldPickaxe = null;
         // Remove island groups
         this.islandGroups.forEach(ig => {
             ig.group.children.forEach(c => {
@@ -239,7 +209,6 @@ export default class GameEngine {
         this.logs = [];
         this.state.isOnBoat = false;
         this.state.activeBoat = null;
-        this.state.heldAxe = null;
         this.playerController.remove();
         this.audio.fadeOut();
         setTimeout(() => this.initGame(null), 800);

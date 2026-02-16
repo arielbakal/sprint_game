@@ -36,29 +36,12 @@ export default class InventoryManager {
         return false;
     }
 
-    addAxeToInventory() {
-        const emptyIdx = this.state.inventory.findIndex(item => item === null);
-        if (emptyIdx !== -1) {
-            this.state.inventory[emptyIdx] = { type: 'axe', color: new THREE.Color(0x5d4037), count: 1 };
-            this.renderInventory();
-            return true;
-        }
-        return false;
-    }
-
-    pickAxeFromInventory() {
-        for (let i = 0; i < INVENTORY_SLOTS; i++) {
-            if (this.state.inventory[i] && this.state.inventory[i].type === 'axe') {
-                this.state.inventory[i] = null;
-                this.renderInventory();
-                return i;
-            }
-        }
-        return null;
-    }
-
-    hasAxeInInventory() {
-        return this.state.inventory.some(item => item && item.type === 'axe');
+    /** Returns the type string of the currently selected inventory item, or null */
+    getSelectedType() {
+        const slot = this.state.selectedSlot;
+        if (slot === null) return null;
+        const item = this.state.inventory[slot];
+        return item ? item.type : null;
     }
 
     renderInventory() {
@@ -74,7 +57,7 @@ export default class InventoryManager {
                 if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
                 if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
                 if (it.type === 'wood' || it.type === 'log') d.style.background = d.style.color;
-                if (it.type === 'axe') d.style.background = d.style.color;
+                if (it.type === 'axe' || it.type === 'pickaxe') d.style.background = d.style.color;
                 el.appendChild(d);
                 if (it.count > 1) {
                     const countEl = document.createElement('span');
@@ -87,7 +70,7 @@ export default class InventoryManager {
     }
 
     /**
-     * Auto-pickup system - collect nearby items.
+     * Auto-pickup system - collect nearby items (logs, axes, pickaxes).
      * Called each frame by the system manager.
      */
     update(dt, context) {
@@ -105,6 +88,15 @@ export default class InventoryManager {
             if (dist < PICKUP_RANGE && e.scale.x > 0.5) {
                 if (e.userData.type === 'log') {
                     const added = this.addToInventory('wood', e.userData.color, null);
+                    if (added) {
+                        audio.pickup();
+                        for (let j = 0; j < 8; j++) factory.createParticle(e.position.clone(), e.userData.color, 0.8);
+                        world.remove(e);
+                        state.entities.splice(i, 1);
+                    }
+                }
+                if (e.userData.type === 'rock') {
+                    const added = this.addToInventory('rock', e.userData.color, null);
                     if (added) {
                         audio.pickup();
                         for (let j = 0; j < 8; j++) factory.createParticle(e.position.clone(), e.userData.color, 0.8);
