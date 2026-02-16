@@ -204,7 +204,7 @@ export default class PlayerController {
                     // base_y is usually -1.4 (O_Y)
                     const base_y = -1.4;
                     const h = base_y + obs.userData.mountHeight * (1 - dist / maxR);
-                    
+
                     // If we are above (or slightly below) the mountain surface, snap to it
                     // Check if player is somewhat near the surface to snap
                     if (player.pos.y > h - 1.0) {
@@ -233,14 +233,14 @@ export default class PlayerController {
 
         // Apply mountain height if active
         if (groundHeightOverride !== null) {
-             // Only snap if we are falling or walking on it
-             if (player.pos.y < groundHeightOverride + 0.5) {
+            // Only snap if we are falling or walking on it
+            if (player.pos.y < groundHeightOverride + 0.5) {
                 player.pos.y = groundHeightOverride;
                 player.vel.y = 0;
                 player.onGround = true;
                 // Update playerGroup immediately to avoid jitter
                 this.playerGroup.position.copy(player.pos);
-             }
+            }
         }
 
         // Jump
@@ -311,10 +311,7 @@ export default class PlayerController {
         const ca = player.cameraAngle;
 
         // Clamp vertical angle
-        if (player.cameraMode === 'first') {
-            // Allow full range for FPS
-            ca.y = Math.max(-1.5, Math.min(1.5, ca.y));
-        } else {
+        if (player.cameraMode !== 'first') {
             // Restrict for TPS
             ca.y = Math.max(0.1, Math.min(1.4, ca.y));
         }
@@ -323,22 +320,11 @@ export default class PlayerController {
             if (this.modelPivot) this.modelPivot.visible = false;
             // First person: Camera at eye level
             camera.position.set(player.pos.x, player.pos.y + 1.6, player.pos.z);
-            // Look direction derived from angles (inverted relative to orbit)
-            // ca.x is azimuth. In TPS, camera is at +sin(x), +cos(x).
-            // To look "outward" in the same direction the camera WAS, we look towards -sin(x), -cos(x).
-            // But usually we want W to move forward (towards look dir).
-            // In TPS, W moves towards player orientation.
-            // Let's enforce that camera looks "forward".
 
-            // Note: ca.x logic in input handler subtracts e.movementX.
-            // Map angles to look target
-            const lookX = -Math.sin(ca.x);
-            const lookZ = -Math.cos(ca.x);
-            // Height mapping: ca.y=0 -> horizon.
-            // In TPS code: camY = pos.y + dist * sin(ca.y). sin(0)=0 (horizon), sin(1.4)=0.98 (overhead).
-            // So ca.y is elevation.
-            // For FPS, let's just hold simple pitch.
-            const lookY = Math.tan(ca.y - 0.3); // Minus offset to center horizon
+            // ca.x = yaw (horizontal), ca.y = pitch (vertical, positive = up)
+            const lookX = -Math.sin(ca.x) * Math.cos(ca.y);
+            const lookZ = -Math.cos(ca.x) * Math.cos(ca.y);
+            const lookY = Math.sin(ca.y);
 
             const target = new THREE.Vector3(
                 camera.position.x + lookX,
