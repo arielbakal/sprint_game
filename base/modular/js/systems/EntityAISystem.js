@@ -6,7 +6,7 @@
 import {
     CREATURE_HUNGER_RATE, CREATURE_HUNGER_WARN, CREATURE_HUNGER_DEATH,
     CREATURE_BREED_EAT_THRESHOLD, CREATURE_BREED_AGE, CREATURE_WANDER_RADIUS,
-    FOOD_PRODUCTION_TIME, EGG_HATCH_TIME, MAX_CREATURES
+    FOOD_PRODUCTION_TIME, EGG_HATCH_TIME, MAX_CREATURES, MAX_FOODS
 } from '../constants.js';
 
 export default class EntityAISystem {
@@ -47,7 +47,7 @@ export default class EntityAISystem {
             // --- Food production (trees & bushes) ---
             if (e.userData.type === 'tree' || e.userData.type === 'bush') {
                 e.userData.productionTimer = (e.userData.productionTimer || 0) + dt;
-                if (e.userData.productionTimer > FOOD_PRODUCTION_TIME) {
+                if (e.userData.productionTimer > FOOD_PRODUCTION_TIME && state.foods.length < MAX_FOODS) {
                     e.userData.productionTimer = 0;
                     const foodPos = e.position.clone();
                     foodPos.x += (Math.random() - 0.5) * 1.2;

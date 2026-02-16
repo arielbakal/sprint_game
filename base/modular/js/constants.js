@@ -72,6 +72,7 @@ export const MAX_CREATURES = 15;          // population cap to prevent exponenti
 
 // Food production
 export const FOOD_PRODUCTION_TIME = 25; // seconds
+export const MAX_FOODS = 30;            // population cap to prevent food overload
 
 // Inventory
 export const INVENTORY_SLOTS = 8;
