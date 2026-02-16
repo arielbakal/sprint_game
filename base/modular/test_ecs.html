@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test ECS</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div id="info">Cargando...</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script type="module">
+        document.getElementById('info').textContent = 'Three.js cargado, iniciando ECS...';
+        console.log('🚀 THREE:', typeof THREE);
+        
+        import { World } from './js/ecs/core/World.js';
+        
+        console.log('✅ World importado');
+        
+        const world = new World();
+        console.log('✅ World creado:', world);
+        
+        // Crear entidad de prueba
+        const entity = world.createEntity();
+        console.log('✅ Entidad creada:', entity);
+        
+        document.getElementById('info').textContent = 'ECS funcionando! Entidad: ' + entity;
+    </script>
+</body>
+</html>

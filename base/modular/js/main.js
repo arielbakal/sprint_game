@@ -1,8 +1,14 @@
 // =====================================================
-// POCKET TERRARIUM - MAIN ENTRY POINT
+// MAIN - ECS PURO
 // =====================================================
 
-import GameEngine from './classes/GameEngine.js';
+console.log('🚀 Iniciando juego ECS...');
 
-// Initialize the game
-const game = new GameEngine();
+try {
+  const game = new GameEngineECS();
+  window.game = game;
+  console.log('✅ Complete!');
+} catch (e) {
+  console.error('❌ Error:', e);
+  alert('Error: ' + e.message);
+}
