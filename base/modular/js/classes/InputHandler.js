@@ -45,17 +45,13 @@ export default class InputHandler {
                 // If switching to first person, reset vertical angle for better view
                 if (state.player.cameraMode === 'first') state.player.cameraAngle.y = 0.0;
             }
-            // E to board/exit boat
+            // E to board/exit boat OR store/pick axe (mutually exclusive)
             if (k === 'e' && state.phase === 'playing' && !state.isBoardingBoat) {
                 if (state.isOnBoat) {
                     this.engine.disembarkBoat();
                 } else if (this.engine._nearestBoat) {
                     this.engine.boardBoat(this.engine._nearestBoat);
-                }
-            }
-            // E to store/pick axe from inventory
-            if (k === 'e' && state.phase === 'playing') {
-                if (state.heldAxe) {
+                } else if (state.heldAxe) {
                     // Store axe in inventory
                     const stored = this.engine.addAxeToInventory();
                     if (stored) {

@@ -1,0 +1,20 @@
+{
+  "name": "island-survival-multiplayer",
+  "version": "0.1.0",
+  "description": "Island Survival - Multiplayer 3D browser game built with Three.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "serve": "npx serve base/modular -l 3000"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "serve": "^14.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

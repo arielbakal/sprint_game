@@ -1,0 +1,118 @@
+// =====================================================
+// INVENTORY MANAGER - Slot management & UI rendering
+// =====================================================
+
+import {
+    INVENTORY_SLOTS,
+    NON_STACKABLE_TYPES,
+    PICKUP_RANGE
+} from '../constants.js';
+
+export default class InventoryManager {
+    constructor(state, audio, ui) {
+        this.state = state;
+        this.audio = audio;
+        this.ui = ui;
+    }
+
+    addToInventory(type, color, style, age = 0) {
+        const isStackable = NON_STACKABLE_TYPES.indexOf(type) === -1;
+        if (isStackable) {
+            const existingIdx = this.state.inventory.findIndex(item =>
+                item && item.type === type && item.color.getHex() === color.getHex()
+            );
+            if (existingIdx !== -1) {
+                this.state.inventory[existingIdx].count = (this.state.inventory[existingIdx].count || 1) + 1;
+                this.renderInventory();
+                return true;
+            }
+        }
+        const emptyIdx = this.state.inventory.findIndex(item => item === null);
+        if (emptyIdx !== -1) {
+            this.state.inventory[emptyIdx] = { type, color, style, age, count: 1 };
+            this.renderInventory();
+            return true;
+        }
+        return false;
+    }
+
+    addAxeToInventory() {
+        const emptyIdx = this.state.inventory.findIndex(item => item === null);
+        if (emptyIdx !== -1) {
+            this.state.inventory[emptyIdx] = { type: 'axe', color: new THREE.Color(0x5d4037), count: 1 };
+            this.renderInventory();
+            return true;
+        }
+        return false;
+    }
+
+    pickAxeFromInventory() {
+        for (let i = 0; i < INVENTORY_SLOTS; i++) {
+            if (this.state.inventory[i] && this.state.inventory[i].type === 'axe') {
+                this.state.inventory[i] = null;
+                this.renderInventory();
+                return i;
+            }
+        }
+        return null;
+    }
+
+    hasAxeInInventory() {
+        return this.state.inventory.some(item => item && item.type === 'axe');
+    }
+
+    renderInventory() {
+        const slots = document.querySelectorAll('.slot');
+        slots.forEach((el, i) => {
+            el.innerHTML = '';
+            el.classList.toggle('active', this.state.selectedSlot === i);
+            const it = this.state.inventory[i];
+            if (it) {
+                const d = document.createElement('div');
+                d.style.color = '#' + it.color.getHexString();
+                d.className = `icon-${it.type}`;
+                if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
+                if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
+                if (it.type === 'wood' || it.type === 'log') d.style.background = d.style.color;
+                if (it.type === 'axe') d.style.background = d.style.color;
+                el.appendChild(d);
+                if (it.count > 1) {
+                    const countEl = document.createElement('span');
+                    countEl.innerText = it.count;
+                    countEl.style.cssText = 'position:absolute;bottom:2px;right:2px;color:#fff;font-size:10px;text-shadow:1px 1px 0 #000;pointer-events:none;';
+                    el.appendChild(countEl);
+                }
+            }
+        });
+    }
+
+    /**
+     * Auto-pickup system - collect nearby items.
+     * Called each frame by the system manager.
+     */
+    update(dt, context) {
+        const { state, world, audio, factory } = context;
+        const playerPos = state.player.pos;
+
+        if (state.isOnBoat || state.isBoardingBoat) return;
+
+        for (let i = state.entities.length - 1; i >= 0; i--) {
+            const e = state.entities[i];
+            if (!e.userData.autoPickup) continue;
+            const dx = e.position.x - playerPos.x;
+            const dz = e.position.z - playerPos.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < PICKUP_RANGE && e.scale.x > 0.5) {
+                if (e.userData.type === 'log') {
+                    const added = this.addToInventory('wood', e.userData.color, null);
+                    if (added) {
+                        audio.pickup();
+                        for (let j = 0; j < 8; j++) factory.createParticle(e.position.clone(), e.userData.color, 0.8);
+                        world.remove(e);
+                        state.entities.splice(i, 1);
+                    }
+                }
+            }
+        }
+    }
+}
