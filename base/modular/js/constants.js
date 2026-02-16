@@ -68,13 +68,15 @@ export const CREATURE_BREED_AGE = 8;
 export const EGG_HATCH_TIME = 10.0;
 export const CREATURE_HUNGER_WARN = 15;
 export const CREATURE_WANDER_RADIUS = 8;
+export const MAX_CREATURES = 15;          // population cap to prevent exponential growth
 
 // Food production
 export const FOOD_PRODUCTION_TIME = 25; // seconds
+export const MAX_FOODS = 30;            // population cap to prevent food overload
 
 // Inventory
 export const INVENTORY_SLOTS = 8;
-export const NON_STACKABLE_TYPES = ['creature', 'egg'];
+export const NON_STACKABLE_TYPES = ['creature', 'egg', 'axe', 'pickaxe'];
 
 // Particles
 export const PARTICLE_GRAVITY = 0.002;

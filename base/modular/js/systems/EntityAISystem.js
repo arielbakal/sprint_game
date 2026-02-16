@@ -6,7 +6,7 @@
 import {
     CREATURE_HUNGER_RATE, CREATURE_HUNGER_WARN, CREATURE_HUNGER_DEATH,
     CREATURE_BREED_EAT_THRESHOLD, CREATURE_BREED_AGE, CREATURE_WANDER_RADIUS,
-    FOOD_PRODUCTION_TIME, EGG_HATCH_TIME
+    FOOD_PRODUCTION_TIME, EGG_HATCH_TIME, MAX_CREATURES, MAX_FOODS
 } from '../constants.js';
 
 export default class EntityAISystem {
@@ -47,7 +47,7 @@ export default class EntityAISystem {
             // --- Food production (trees & bushes) ---
             if (e.userData.type === 'tree' || e.userData.type === 'bush') {
                 e.userData.productionTimer = (e.userData.productionTimer || 0) + dt;
-                if (e.userData.productionTimer > FOOD_PRODUCTION_TIME) {
+                if (e.userData.productionTimer > FOOD_PRODUCTION_TIME && state.foods.length < MAX_FOODS) {
                     e.userData.productionTimer = 0;
                     const foodPos = e.position.clone();
                     foodPos.x += (Math.random() - 0.5) * 1.2;
@@ -105,8 +105,9 @@ export default class EntityAISystem {
             e.userData.eatenCount = (e.userData.eatenCount || 0) + 1;
             for (let j = 0; j < 3; j++) factory.createParticle(e.position.clone(), state.palette.accent, 0.5);
 
-            // Breed
-            if (e.userData.eatenCount >= CREATURE_BREED_EAT_THRESHOLD && e.userData.age > CREATURE_BREED_AGE) {
+            // Breed (only if population is below cap)
+            const creatureCount = state.entities.filter(ent => ent.userData.type === 'creature' || ent.userData.type === 'egg').length;
+            if (e.userData.eatenCount >= CREATURE_BREED_EAT_THRESHOLD && e.userData.age > CREATURE_BREED_AGE && creatureCount < MAX_CREATURES) {
                 e.userData.eatenCount = 0;
                 audio.layEgg();
                 const egg = factory.createEgg(e.position.clone(), e.userData.color, e.userData.style);

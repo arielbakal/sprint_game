@@ -143,34 +143,6 @@ export default class GameEngine {
         return false;
     }
 
-    addAxeToInventory() {
-        const state = this.state;
-        const emptyIdx = state.inventory.findIndex(item => item === null);
-        if (emptyIdx !== -1) {
-            state.inventory[emptyIdx] = { type: 'axe', color: new THREE.Color(0x5d4037), count: 1 };
-            this.updateInventory();
-            return true;
-        }
-        return false;
-    }
-
-    pickAxeFromInventory() {
-        const state = this.state;
-        for (let i = 0; i < 8; i++) {
-            if (state.inventory[i] && state.inventory[i].type === 'axe') {
-                state.inventory[i] = null;
-                this.updateInventory();
-                return i;
-            }
-        }
-        return null;
-    }
-
-    hasAxeInInventory() {
-        const state = this.state;
-        return state.inventory.some(item => item && item.type === 'axe');
-    }
-
     updateInventory() {
         const slots = document.querySelectorAll('.slot');
         slots.forEach((el, i) => {
@@ -184,7 +156,7 @@ export default class GameEngine {
                 if (['creature', 'rock', 'grass', 'flower', 'egg'].includes(it.type)) d.style.background = d.style.color;
                 if (it.type === 'bush') d.style.borderBottomColor = d.style.color;
                 if (it.type === 'wood' || it.type === 'log') d.style.background = d.style.color;
-                if (it.type === 'axe') d.style.background = d.style.color;
+                if (it.type === 'axe' || it.type === 'pickaxe') d.style.background = d.style.color;
                 el.appendChild(d);
                 if (it.count > 1) {
                     const countEl = document.createElement('span');
@@ -220,8 +192,6 @@ export default class GameEngine {
             this.state.debris.push(f);
         });
         this.state.entities = []; this.state.obstacles = []; this.state.foods = [];
-        this.state.heldAxe = null;
-        this.state.heldPickaxe = null;
         // Remove island groups
         this.islandGroups.forEach(ig => {
             ig.group.children.forEach(c => {
@@ -239,7 +209,6 @@ export default class GameEngine {
         this.logs = [];
         this.state.isOnBoat = false;
         this.state.activeBoat = null;
-        this.state.heldAxe = null;
         this.playerController.remove();
         this.audio.fadeOut();
         setTimeout(() => this.initGame(null), 800);
@@ -294,7 +263,7 @@ export default class GameEngine {
         for (let i = 0; i < 30; i++) { const p = rndPolar(0, 0, 0.5, 10.0); const e = this.factory.createGrass(this.state.palette, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 8; i++) { const p = rndPolar(0, 0, 1.0, 9.0); const e = this.factory.createFlower(this.state.palette, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         // Creatures on island 1
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 2; i++) {
             const p = rndPolar(0, 0, 2.0, 7.0);
             const c = this.factory.createCreature(this.state.palette, p.x, p.z);
             c.userData.boundCenter = { x: 0, z: 0 };
@@ -402,6 +371,15 @@ export default class GameEngine {
         for (let i = 0; i < 10; i++) { const p = rndPolar(0, 110, 17.0, 26.0); const e = this.factory.createTree(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 40; i++) { const p = rndPolar(0, 110, 17.0, 27.0); const e = this.factory.createGrass(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 12; i++) { const p = rndPolar(0, 110, 17.0, 22.0); const e = this.factory.createFlower(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        // Creatures on island 3
+        for (let i = 0; i < 5; i++) {
+            const p = rndPolar(0, 110, 17.0, 24.0);
+            const c = this.factory.createCreature(palette3, p.x, p.z);
+            c.userData.boundCenter = { x: 0, z: 110 };
+            c.userData.boundRadius = island3.radius * 0.85;
+            this.state.entities.push(c);
+            this.world.add(c);
+        }
 
         // --- Island 4: Fourth island ---
         const palette4 = this.factory.generatePalette(null);
