@@ -694,3 +694,83 @@ input[type=range] {
     border-radius: 2px;
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
 }
+
+/* =====================================================
+   MULTIPLAYER PANEL
+   ===================================================== */
+#mp-panel {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(0, 255, 0, 0.3);
+    border-radius: 6px;
+    padding: 10px 14px;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 170px;
+    z-index: 100;
+}
+
+#mp-header {
+    color: #0f0;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-align: center;
+}
+
+#mp-status {
+    color: #aaa;
+    font-size: 8px;
+    text-align: center;
+}
+
+#mp-url {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    padding: 4px 6px;
+    outline: none;
+    width: 100%;
+}
+
+#mp-url:focus {
+    border-color: #0f0;
+}
+
+#mp-connect-btn {
+    background: rgba(0, 255, 0, 0.2);
+    border: 1px solid #0f0;
+    border-radius: 3px;
+    color: #0f0;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#mp-connect-btn:hover {
+    background: rgba(0, 255, 0, 0.4);
+}
+
+#mp-connect-btn.connected {
+    background: rgba(255, 50, 50, 0.2);
+    border-color: #f33;
+    color: #f33;
+}
+
+#mp-connect-btn.connected:hover {
+    background: rgba(255, 50, 50, 0.4);
+}
+
+#mp-player-count {
+    color: #888;
+    font-size: 7px;
+    text-align: center;
+}

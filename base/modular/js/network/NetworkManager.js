@@ -1,0 +1,157 @@
+// =====================================================
+// NETWORK MANAGER - WebSocket client stub for
+//                   multiplayer (to be implemented)
+// =====================================================
+
+import MessageProtocol from './MessageProtocol.js';
+
+export default class NetworkManager {
+    constructor() {
+        this.ws = null;
+        this.connected = false;
+        this.playerId = null;
+        this.remotePlayers = new Map();   // id → { position, rotation, state }
+        this.onPlayerJoin = null;         // callback(id, data)
+        this.onPlayerLeave = null;        // callback(id)
+        this.onPlayerUpdate = null;       // callback(id, data)
+        this.onWorldEvent = null;         // callback(event)
+        this.onWelcome = null;            // callback(data) - receives seed, playerCount
+        this._sendQueue = [];
+        this._lastSendTime = 0;
+        this.SEND_RATE = 1000 / 20;       // 20 ticks/sec
+        this.worldSeed = null;            // seed from server
+    }
+
+    /**
+     * Connect to game server
+     * @param {string} url - WebSocket URL e.g. ws://localhost:3000
+     * @returns {Promise<void>}
+     */
+    connect(url) {
+        return new Promise((resolve, reject) => {
+            try {
+                this.ws = new WebSocket(url);
+                this.ws.binaryType = 'arraybuffer';
+
+                this.ws.onopen = () => {
+                    this.connected = true;
+                    console.log('[Network] Connected to', url);
+                    resolve();
+                };
+
+                this.ws.onmessage = (event) => {
+                    this._handleMessage(event.data);
+                };
+
+                this.ws.onclose = () => {
+                    this.connected = false;
+                    this.remotePlayers.clear();
+                    console.log('[Network] Disconnected');
+                };
+
+                this.ws.onerror = (err) => {
+                    console.error('[Network] Error', err);
+                    reject(err);
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    disconnect() {
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+    }
+
+    /**
+     * Send player state snapshot (position, rotation, action)
+     */
+    sendPlayerState(state) {
+        if (!this.connected) return;
+        const now = performance.now();
+        if (now - this._lastSendTime < this.SEND_RATE) return;
+        this._lastSendTime = now;
+
+        this._send(MessageProtocol.encode({
+            type: 'player_state',
+            position: {
+                x: state.player.pos.x,
+                y: state.player.pos.y,
+                z: state.player.pos.z
+            },
+            rotation: state.player.targetRotation || 0,
+            isOnBoat: state.isOnBoat,
+            activeAction: state.isChopping ? 'chop' : state.isMining ? 'mine' : null
+        }));
+    }
+
+    /**
+     * Broadcast a world-changing event (tree chopped, entity spawned, etc.)
+     */
+    sendWorldEvent(event) {
+        if (!this.connected) return;
+        this._send(MessageProtocol.encode({
+            type: 'world_event',
+            ...event
+        }));
+    }
+
+    _send(data) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(data);
+        }
+    }
+
+    _handleMessage(raw) {
+        const msg = MessageProtocol.decode(raw);
+        if (!msg) return;
+
+        switch (msg.type) {
+            case 'welcome':
+                this.playerId = msg.id;
+                this.worldSeed = msg.seed || null;
+                console.log('[Network] Assigned ID:', msg.id, 'Seed:', msg.seed);
+                if (this.onWelcome) this.onWelcome(msg);
+                break;
+
+            case 'player_join':
+                this.remotePlayers.set(msg.id, {
+                    position: msg.position,
+                    rotation: msg.rotation
+                });
+                if (this.onPlayerJoin) this.onPlayerJoin(msg.id, msg);
+                break;
+
+            case 'player_leave':
+                this.remotePlayers.delete(msg.id);
+                if (this.onPlayerLeave) this.onPlayerLeave(msg.id);
+                break;
+
+            case 'player_state':
+                if (this.remotePlayers.has(msg.id)) {
+                    const remote = this.remotePlayers.get(msg.id);
+                    remote.position = msg.position;
+                    remote.rotation = msg.rotation;
+                    remote.isOnBoat = msg.isOnBoat;
+                    remote.activeAction = msg.activeAction;
+                }
+                if (this.onPlayerUpdate) this.onPlayerUpdate(msg.id, msg);
+                break;
+
+            case 'world_event':
+                if (this.onWorldEvent) this.onWorldEvent(msg);
+                break;
+        }
+    }
+
+    /**
+     * Interpolate remote players (call each frame)
+     */
+    update(dt) {
+        // Future: implement position interpolation / extrapolation
+        // for smooth remote player movement
+    }
+}
