@@ -262,10 +262,12 @@ export default class GameEngine {
         for (let i = 0; i < 5; i++) { const p = rndPolar(0, 0, 1.5, 9.0); const e = this.factory.createRock(this.state.palette, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 30; i++) { const p = rndPolar(0, 0, 0.5, 10.0); const e = this.factory.createGrass(this.state.palette, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 8; i++) { const p = rndPolar(0, 0, 1.0, 9.0); const e = this.factory.createFlower(this.state.palette, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
-        // Creatures on island 1
-        for (let i = 0; i < 2; i++) {
+        // Creatures on island 1 - one of each type (blobby, blocky, conehead)
+        const speciesTypes = ['blobby', 'blocky', 'conehead'];
+        for (let i = 0; i < 3; i++) {
             const p = rndPolar(0, 0, 2.0, 7.0);
-            const c = this.factory.createCreature(this.state.palette, p.x, p.z);
+            const creatureDNA = this.factory.generateCreatureDNA(this.state.palette, speciesTypes[i]);
+            const c = this.factory.createCreature(this.state.palette, p.x, p.z, creatureDNA);
             c.userData.boundCenter = { x: 0, z: 0 };
             c.userData.boundRadius = island1.radius * 0.85;
             this.state.entities.push(c);
@@ -309,10 +311,11 @@ export default class GameEngine {
         this.state.entities.push(pickaxe);
         this.world.add(pickaxe);
 
-        // Creatures on island 2
+        // Creatures on island 2 - one of each type
         for (let i = 0; i < 3; i++) {
             const p = rndPolar(80, 0, 2.0, 9.0);
-            const c = this.factory.createCreature(palette2, p.x, p.z);
+            const creatureDNA = this.factory.generateCreatureDNA(palette2, speciesTypes[i]);
+            const c = this.factory.createCreature(palette2, p.x, p.z, creatureDNA);
             c.userData.boundCenter = { x: 80, z: 0 };
             c.userData.boundRadius = island2.radius * 0.85;
             this.state.entities.push(c);
@@ -371,8 +374,17 @@ export default class GameEngine {
         for (let i = 0; i < 10; i++) { const p = rndPolar(0, 110, 17.0, 26.0); const e = this.factory.createTree(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 40; i++) { const p = rndPolar(0, 110, 17.0, 27.0); const e = this.factory.createGrass(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 12; i++) { const p = rndPolar(0, 110, 17.0, 22.0); const e = this.factory.createFlower(palette3, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
-        // Creatures on island 3
-        for (let i = 0; i < 5; i++) {
+        // Creatures on island 3 - 3 types + 2 random
+        for (let i = 0; i < 3; i++) {
+            const p = rndPolar(0, 110, 17.0, 24.0);
+            const creatureDNA = this.factory.generateCreatureDNA(palette3, speciesTypes[i]);
+            const c = this.factory.createCreature(palette3, p.x, p.z, creatureDNA);
+            c.userData.boundCenter = { x: 0, z: 110 };
+            c.userData.boundRadius = island3.radius * 0.85;
+            this.state.entities.push(c);
+            this.world.add(c);
+        }
+        for (let i = 0; i < 2; i++) {
             const p = rndPolar(0, 110, 17.0, 24.0);
             const c = this.factory.createCreature(palette3, p.x, p.z);
             c.userData.boundCenter = { x: 0, z: 110 };
@@ -398,9 +410,11 @@ export default class GameEngine {
         for (let i = 0; i < 3; i++) { const p = rndPolar(-90, -50, 1.5, 8.0); const e = this.factory.createRock(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 12; i++) { const p = rndPolar(-90, -50, 0.5, 9.0); const e = this.factory.createGrass(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 4; i++) { const p = rndPolar(-90, -50, 1.0, 8.0); const e = this.factory.createFlower(palette4, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
-        for (let i = 0; i < 2; i++) {
+        // Creatures on island 4 - one of each type
+        for (let i = 0; i < 3; i++) {
             const p = rndPolar(-90, -50, 2.0, 6.0);
-            const c = this.factory.createCreature(palette4, p.x, p.z);
+            const creatureDNA = this.factory.generateCreatureDNA(palette4, speciesTypes[i]);
+            const c = this.factory.createCreature(palette4, p.x, p.z, creatureDNA);
             c.userData.boundCenter = { x: -90, z: -50 };
             c.userData.boundRadius = island4.radius * 0.85;
             this.state.entities.push(c);
@@ -424,9 +438,11 @@ export default class GameEngine {
         for (let i = 0; i < 4; i++) { const p = rndPolar(50, -100, 1.5, 10.0); const e = this.factory.createRock(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 18; i++) { const p = rndPolar(50, -100, 0.5, 11.0); const e = this.factory.createGrass(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
         for (let i = 0; i < 5; i++) { const p = rndPolar(50, -100, 1.0, 10.0); const e = this.factory.createFlower(palette5, p.x, p.z); this.state.entities.push(e); this.world.add(e); }
+        // Creatures on island 5 - 3 types
         for (let i = 0; i < 3; i++) {
             const p = rndPolar(50, -100, 2.0, 8.0);
-            const c = this.factory.createCreature(palette5, p.x, p.z);
+            const creatureDNA = this.factory.generateCreatureDNA(palette5, speciesTypes[i]);
+            const c = this.factory.createCreature(palette5, p.x, p.z, creatureDNA);
             c.userData.boundCenter = { x: 50, z: -100 };
             c.userData.boundRadius = island5.radius * 0.85;
             this.state.entities.push(c);

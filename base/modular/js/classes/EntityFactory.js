@@ -39,11 +39,21 @@ export default class EntityFactory {
     generateWorldDNA() {
         const eyeRoll = Math.random();
         const eyeCount = eyeRoll < 0.1 ? 1 : eyeRoll < 0.2 ? 3 : 2;
+        const creatureShapes = ['box', 'sphere', 'cone'];
+        const shapeIndex = Math.floor(Math.random() * 3);
+        const shape = creatureShapes[shapeIndex];
+        const speciesType = shape === 'box' ? 'blocky' : shape === 'sphere' ? 'blobby' : 'conehead';
+        const speciesStats = {
+            blobby: { scaleMin: 0.7, scaleMax: 1.0, speed: 0.04 },
+            blocky: { scaleMin: 0.9, scaleMax: 1.4, speed: 0.03 },
+            conehead: { scaleMin: 1.2, scaleMax: 1.8, speed: 0.02 }
+        };
+        const stats = speciesStats[speciesType];
         return {
             tree: { shape: ['cone', 'box', 'round', 'cylinder'][Math.floor(Math.random() * 4)], heightMod: 1.2 + Math.random() * 1.0, thickMod: 0.6 + Math.random() },
             bush: { shape: ['sphere', 'cone'][Math.floor(Math.random() * 2)], scaleY: 0.7 + Math.random() * 0.5 },
             rock: { shape: ['ico', 'box', 'dodec', 'slab'][Math.floor(Math.random() * 4)], stretch: 0.8 + Math.random() * 0.8 },
-            creature: { shape: ['box', 'sphere'][Math.floor(Math.random() * 2)], eyes: eyeCount, scale: 0.9 + Math.random() * 0.5, eyeScale: 1.0 + Math.random() * 0.6 },
+            creature: { shape: shape, speciesType: speciesType, eyes: eyeCount, scale: stats.scaleMin + Math.random() * (stats.scaleMax - stats.scaleMin), eyeScale: 1.0 + Math.random() * 0.6, moveSpeed: stats.speed },
             grass: { height: 0.3 + Math.random() * 0.5 }
         };
     }
@@ -359,18 +369,56 @@ export default class EntityFactory {
         return g;
     }
 
+    generateCreatureDNA(palette, speciesType = null) {
+        const eyeRoll = Math.random();
+        const eyeCount = eyeRoll < 0.1 ? 1 : eyeRoll < 0.2 ? 3 : 2;
+        if (!speciesType) {
+            speciesType = ['blobby', 'blocky', 'conehead'][Math.floor(Math.random() * 3)];
+        }
+        const speciesStats = {
+            blobby: { shape: 'sphere', scaleMin: 0.7, scaleMax: 1.0, speed: 0.04 },
+            blocky: { shape: 'box', scaleMin: 0.9, scaleMax: 1.4, speed: 0.03 },
+            conehead: { shape: 'cone', scaleMin: 1.2, scaleMax: 1.8, speed: 0.02 }
+        };
+        const stats = speciesStats[speciesType];
+        const colorVar = Math.random() * 0.15;
+        const baseColor = palette.creature.clone();
+        baseColor.offsetHSL(colorVar, 0, 0);
+        return {
+            color: baseColor,
+            bodyShape: stats.shape,
+            speciesType: speciesType,
+            eyeCount: eyeCount,
+            scale: stats.scaleMin + Math.random() * (stats.scaleMax - stats.scaleMin),
+            eyeScale: 1.0 + Math.random() * 0.6,
+            moveSpeed: stats.speed
+        };
+    }
+
     createCreature(p, x, z, style = null) {
         const g = new THREE.Group();
         const dna = style || {
             color: p.creature.clone(), bodyShape: this.state.worldDNA.creature.shape,
+            speciesType: this.state.worldDNA.creature.speciesType,
             eyeCount: this.state.worldDNA.creature.eyes, scale: this.state.worldDNA.creature.scale,
-            eyeScale: this.state.worldDNA.creature.eyeScale
+            eyeScale: this.state.worldDNA.creature.eyeScale,
+            moveSpeed: this.state.worldDNA.creature.moveSpeed
         };
-        let body = dna.bodyShape === 'box' ? new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.3, 0.42), this.getMat(dna.color)) :
-            new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), this.getMat(dna.color));
+        const bodyShape = dna.bodyShape;
+        const scale = dna.scale || 1.0;
+        const moveSpeed = dna.moveSpeed || 0.03;
+        let body;
+        if (bodyShape === 'box') {
+            body = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.3, 0.42), this.getMat(dna.color));
+        } else if (bodyShape === 'cone') {
+            body = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.35, 8), this.getMat(dna.color));
+        } else {
+            body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), this.getMat(dna.color));
+        }
         body.position.y = 0.15;
+        body.scale.set(scale, scale, scale);
         g.add(body);
-        const baseEyeR = 0.045 * dna.scale * (dna.eyeScale || 1.0);
+        const baseEyeR = 0.045 * scale * (dna.eyeScale || 1.0);
         const eyeGeo = new THREE.SphereGeometry(baseEyeR, 4, 4);
         const pupGeo = new THREE.SphereGeometry(baseEyeR * 0.4, 4, 4);
         const eyeMat = this.getMat(0xffffff);
@@ -381,16 +429,21 @@ export default class EntityFactory {
             const pm = new THREE.Mesh(pupGeo, pupMat);
             pm.position.z = baseEyeR * 0.7;
             e.add(em, pm);
-            e.position.set(px, py, pz);
+            e.position.set(px * scale, py * scale, pz * scale);
             e.rotation.y = ry;
             e.userData = { isEye: true };
             return e;
         };
-        if (dna.bodyShape === 'box') {
+        if (bodyShape === 'box') {
             const sideX = 0.19, eyeY = 0.22, eyeZ = 0.15, rot = 0;
             if (dna.eyeCount === 1) g.add(addEye(0, eyeY, 0.22, rot));
             else if (dna.eyeCount === 2) { g.add(addEye(sideX, eyeY, eyeZ, rot)); g.add(addEye(-sideX, eyeY, eyeZ, rot)); }
             else { g.add(addEye(sideX, eyeY, eyeZ, rot)); g.add(addEye(-sideX, eyeY, eyeZ, rot)); g.add(addEye(0, eyeY + 0.08, 0.22, 0)); }
+        } else if (bodyShape === 'cone') {
+            const sideX = 0.12, eyeY = 0.28, eyeZ = 0.18, rot = 0;
+            if (dna.eyeCount === 1) g.add(addEye(0, eyeY, eyeZ, rot));
+            else if (dna.eyeCount === 2) { g.add(addEye(sideX, eyeY, eyeZ, rot)); g.add(addEye(-sideX, eyeY, eyeZ, rot)); }
+            else { g.add(addEye(sideX, eyeY, eyeZ, rot)); g.add(addEye(-sideX, eyeY, eyeZ, rot)); g.add(addEye(0, eyeY + 0.06, 0.22, 0)); }
         } else {
             const isFrontEyes = Math.random() < 0.5;
             const eyeY = 0.22;
@@ -408,10 +461,11 @@ export default class EntityFactory {
         }
         g.position.set(x, this.O_Y + 0.3, z);
         g.scale.set(0, 0, 0);
+        const radius = 0.5 * scale;
         g.userData = {
-            type: 'creature', radius: 0.5, hunger: 0, age: 0, eatenCount: 0,
-            moveSpeed: 0.03, hopOffset: Math.random() * 100,
-            color: dna.color, bubble: null, style: dna, targetScale: dna.scale, cooldown: 0
+            type: 'creature', speciesType: dna.speciesType, radius: radius, hunger: 0, age: 0, eatenCount: 0,
+            moveSpeed: moveSpeed, hopOffset: Math.random() * 100,
+            color: dna.color, bubble: null, style: dna, targetScale: scale, cooldown: 0
         };
         return g;
     }
