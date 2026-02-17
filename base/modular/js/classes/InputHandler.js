@@ -240,13 +240,15 @@ export default class InputHandler {
                 }
             }
 
-            // Try melee attack on nearby creatures (always attempt before interaction)
+            // Try melee attack on nearby creatures/players (always attempt before interaction)
             if (this.engine.combatSystem) {
                 const ctx = {
                     state,
                     audio: this.engine.audio,
                     factory: this.engine.factory,
-                    world: this.engine.world
+                    world: this.engine.world,
+                    remotePlayers: this.engine.remotePlayers,
+                    broadcastWorldEvent: (action, x, z, extra) => this.engine.broadcastWorldEvent(action, x, z, extra)
                 };
                 // Always try attack first — if it hits, skip interaction
                 if (this.engine.combatSystem.tryAttack(ctx)) return;

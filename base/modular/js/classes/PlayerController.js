@@ -2,6 +2,9 @@
 // PLAYER CONTROLLER - THIRD PERSON CHARACTER
 // =====================================================
 
+import { CAMERA_MIN_Y, CAMERA_MAX_Y } from '../constants.js';
+
+
 export default class PlayerController {
     constructor(world, state) {
         this.world = world;
@@ -108,30 +111,70 @@ export default class PlayerController {
 
         // --- Camera-relative movement direction ---
         const camera = this.world.camera;
-        const camDir = new THREE.Vector3();
-        camera.getWorldDirection(camDir);
-        camDir.y = 0;
-        camDir.normalize();
+
+        // Robust Forward Calculation:
+        // Instead of projecting forward vector (unstable at poles), use Right vector cross Up
         const camRight = new THREE.Vector3();
-        camRight.crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
+        const camUp = new THREE.Vector3(0, 1, 0);
+
+        // Get camera's local X axis (Right) in world space
+        // Note: camera.matrixWorld handles rotation. Column 0 is Right, 1 Up, 2 Back usually.
+        // Safer to just use cross product of forward if not too steep, OR rely on a known Up?
+        // Actually, just projecting camera forward on XZ plane is standard, but let's clamp it.
+        const camFwd = new THREE.Vector3();
+        camera.getWorldDirection(camFwd);
+        camFwd.y = 0;
+        if (camFwd.lengthSq() < 0.001) {
+            // Camera looking straight down/up - fallback to current player forward or default North
+            camFwd.set(0, 0, -1);
+        } else {
+            camFwd.normalize();
+        }
+
+        camRight.crossVectors(camFwd, camUp).normalize();
 
         // Corrected movement logic relative to camera
         const moveDir = new THREE.Vector3(0, 0, 0);
-        if (state.inputs.w) moveDir.add(camDir);
-        if (state.inputs.s) moveDir.sub(camDir);
-        if (state.inputs.a) moveDir.sub(camRight); // A moves Left (subtract Right)
-        if (state.inputs.d) moveDir.add(camRight); // D moves Right (add Right)
-        const isMoving = moveDir.lengthSq() > 0;
+        let isMoving = false;
 
-        if (isMoving) {
-            moveDir.normalize();
-            const effectiveSpeed = player.speed + (player.speedBoost || 0);
-            player.vel.x = moveDir.x * effectiveSpeed;
-            player.vel.z = moveDir.z * effectiveSpeed;
-            player.targetRotation = Math.atan2(moveDir.x, moveDir.z);
+        if (player.stunTimer > 0) {
+            player.stunTimer -= dt;
+            // Apply friction to knockback velocity
+            player.vel.x *= 0.9;
+            player.vel.z *= 0.9;
         } else {
-            player.vel.x *= 0.8;
-            player.vel.z *= 0.8;
+            if (state.inputs.w) moveDir.add(camFwd);
+            if (state.inputs.s) moveDir.sub(camFwd);
+            // A moves Left (negative Right)
+            if (state.inputs.a) moveDir.sub(camRight);
+            // D moves Right (positive Right)
+            if (state.inputs.d) moveDir.add(camRight);
+
+            // Check threshold larger than 0 to avoid jitter
+            if (moveDir.lengthSq() > 0.01) {
+                isMoving = true;
+                moveDir.normalize();
+
+                const effectiveSpeed = player.speed + (player.speedBoost || 0);
+                player.vel.x = moveDir.x * effectiveSpeed;
+                player.vel.z = moveDir.z * effectiveSpeed;
+
+                // Rotation smoothing loop
+                // Calculate target angle
+                const targetAngle = Math.atan2(moveDir.x, moveDir.z);
+
+                // Shortest path interpolation for angle
+                let angleDiff = targetAngle - player.targetRotation;
+                // Normalize to -PI..PI
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+                // Add smoothed diff
+                player.targetRotation += angleDiff * 0.2; // Smooth snapping
+            } else {
+                player.vel.x *= 0.8;
+                player.vel.z *= 0.8;
+            }
         }
 
         // Gravity
@@ -263,7 +306,7 @@ export default class PlayerController {
         if (isMoving) {
             const targetQ = new THREE.Quaternion();
             targetQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), player.targetRotation);
-            this.modelPivot.quaternion.slerp(targetQ, 0.15);
+            this.modelPivot.quaternion.slerp(targetQ, 0.2); // Snap faster if input is reliable
         }
 
         // --- Invincibility flash ---
@@ -275,12 +318,32 @@ export default class PlayerController {
 
         // --- Procedural animation ---
         if (state.isAttacking) {
-            // Attack swing: quick forward punch with right arm
-            const swingT = (state._attackVisualTimer || 0) / 0.3;
-            this.armR.rotation.x = -1.5 + swingT * 3.0; // wind up to forward
-            this.armL.rotation.x = THREE.MathUtils.lerp(this.armL.rotation.x, -0.3, 0.15);
-            this.legL.rotation.x = THREE.MathUtils.lerp(this.legL.rotation.x, 0, 0.1);
-            this.legR.rotation.x = THREE.MathUtils.lerp(this.legR.rotation.x, 0, 0.1);
+            // Two-phase attack swing with both arms
+            const swingT = (state._attackVisualTimer || 0) / 0.4; // normalized 0→1
+
+            let armAngleR, armAngleL;
+            if (swingT < 0.4) {
+                // Wind-up: both arms pull back
+                const t = swingT / 0.4;
+                armAngleR = -1.8 * t;
+                armAngleL = -1.4 * t;
+            } else if (swingT < 0.8) {
+                // Swing: both arms thrust forward
+                const t = (swingT - 0.4) / 0.4;
+                armAngleR = -1.8 + (1.8 + 1.2) * t;  // -1.8 → 1.2
+                armAngleL = -1.4 + (1.4 + 0.8) * t;  // -1.4 → 0.8
+            } else {
+                // Recovery: lerp back to neutral
+                const t = (swingT - 0.8) / 0.2;
+                armAngleR = 1.2 * (1 - t);
+                armAngleL = 0.8 * (1 - t);
+            }
+
+            this.armR.rotation.x = armAngleR;
+            this.armL.rotation.x = armAngleL;
+            this.legL.rotation.x = THREE.MathUtils.lerp(this.legL.rotation.x, 0, 0.15);
+            this.legR.rotation.x = THREE.MathUtils.lerp(this.legR.rotation.x, 0, 0.15);
+            this.modelPivot.position.y = THREE.MathUtils.lerp(this.modelPivot.position.y, 0, 0.1);
         } else if (this.chopAnimState) {
             // Chopping animation — override arms while chopping
             const { isSwinging, swingProgress } = this.chopAnimState;
@@ -329,7 +392,7 @@ export default class PlayerController {
         // Clamp vertical angle
         if (player.cameraMode !== 'first') {
             // Restrict for TPS
-            ca.y = Math.max(-0.3, Math.min(1.5, ca.y));
+            ca.y = Math.max(CAMERA_MIN_Y || 0.1, Math.min(CAMERA_MAX_Y || 1.4, ca.y));
         }
 
         if (player.cameraMode === 'first') {

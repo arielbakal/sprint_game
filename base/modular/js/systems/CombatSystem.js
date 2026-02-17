@@ -8,7 +8,8 @@ import {
     ATTACK_COOLDOWN, ATTACK_RANGE, ATTACK_ARC,
     CREATURE_CONTACT_DAMAGE, CREATURE_CONTACT_COOLDOWN, CREATURE_AGGRO_DURATION,
     RESPAWN_INVINCIBILITY, PLAYER_RADIUS,
-    STAT_BOOST_PICKUP_RANGE, STAT_BOOST_BOB_SPEED, STAT_BOOST_BOB_HEIGHT, STAT_BOOST_SPIN_SPEED
+    STAT_BOOST_PICKUP_RANGE, STAT_BOOST_BOB_SPEED, STAT_BOOST_BOB_HEIGHT, STAT_BOOST_SPIN_SPEED,
+    CREATURE_ESSENCE_MAP, ATTACK_SWING_DURATION
 } from '../constants.js';
 
 export default class CombatSystem {
@@ -29,7 +30,7 @@ export default class CombatSystem {
         // Clear attack flag after brief window
         if (state.isAttacking) {
             state._attackVisualTimer = (state._attackVisualTimer || 0) + dt;
-            if (state._attackVisualTimer > 0.3) {
+            if (state._attackVisualTimer > ATTACK_SWING_DURATION) {
                 state.isAttacking = false;
                 state._attackVisualTimer = 0;
             }
@@ -44,31 +45,56 @@ export default class CombatSystem {
         }
 
         this._updateCreatureAggro(dt, state);
-        this._updateCreatureContact(dt, state, ctx.audio);
+        this._updateCreatureContact(dt, ctx);
         this._updateStatBoosts(dt, state, ctx.world, ctx.audio, ctx.factory, ctx.t);
         this._updateUI(state);
     }
 
     tryAttack(ctx) {
-        const { state, audio, factory, world } = ctx;
+        const { state, audio, remotePlayers, broadcastWorldEvent, factory } = ctx;
         if (state.isDead) return false;
         if (state.attackCooldown > 0) return false;
 
-        // Use player's attack stat (fists / boosted by stat pickups)
-        const damage = state.player.attack || PLAYER_BASE_ATTACK;
-
-        // Find targets in forward arc
-        const targets = this._findAttackTargets(state);
-        if (targets.length === 0) return false;
-
+        // Always swing — animation, sound, cooldown fire even on whiff
         state.attackCooldown = ATTACK_COOLDOWN;
         state.isAttacking = true;
         state._attackVisualTimer = 0;
 
         audio.chop(); // reuse chop sound for attack
 
+        const damage = state.player.attack || PLAYER_BASE_ATTACK;
+
+        // Damage creatures in range
+        const targets = this._findAttackTargets(state);
         for (const entity of targets) {
             this._damageEntity(entity, damage, ctx);
+        }
+
+        // Damage remote players in range
+        if (remotePlayers) {
+            const hitPlayers = this._findRemotePlayerTargets(state, remotePlayers);
+            for (const { id, playerData } of hitPlayers) {
+                // Visual feedback: flash + particles
+                this._flashEntity(playerData.pivot, 0xff0000, 0.2);
+                for (let i = 0; i < 6; i++) {
+                    factory.createParticle(playerData.group.position.clone(), new THREE.Color(0xff4444), 0.8);
+                }
+                // Visual knockback on attacker's side
+                const dx = playerData.group.position.x - state.player.pos.x;
+                const dz = playerData.group.position.z - state.player.pos.z;
+                const dist = Math.sqrt(dx * dx + dz * dz) || 1;
+                playerData.group.position.x += (dx / dist) * 0.8;
+                playerData.group.position.z += (dz / dist) * 0.8;
+                playerData.targetPos.x += (dx / dist) * 0.8;
+                playerData.targetPos.z += (dz / dist) * 0.8;
+                // Send damage to victim via network
+                if (broadcastWorldEvent) {
+                    broadcastWorldEvent('player_attack', state.player.pos.x, state.player.pos.z, {
+                        targetId: id,
+                        damage: damage
+                    });
+                }
+            }
         }
 
         return true;
@@ -107,6 +133,33 @@ export default class CombatSystem {
         return targets;
     }
 
+    _findRemotePlayerTargets(state, remotePlayers) {
+        const hits = [];
+        const playerPos = state.player.pos;
+        const playerRot = state.player.targetRotation;
+        const fwdX = Math.sin(playerRot);
+        const fwdZ = Math.cos(playerRot);
+
+        for (const [id, p] of remotePlayers.players) {
+            const dx = p.group.position.x - playerPos.x;
+            const dz = p.group.position.z - playerPos.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+
+            if (dist > ATTACK_RANGE) continue;
+
+            if (dist > 0.01) {
+                const ndx = dx / dist;
+                const ndz = dz / dist;
+                const dot = fwdX * ndx + fwdZ * ndz;
+                if (dot < Math.cos(ATTACK_ARC / 2)) continue;
+            }
+
+            hits.push({ id, playerData: p });
+        }
+
+        return hits;
+    }
+
     _damageEntity(entity, damage, ctx) {
         const { state, world, factory, audio } = ctx;
 
@@ -136,6 +189,15 @@ export default class CombatSystem {
             for (let i = 0; i < 20; i++) {
                 factory.createParticle(entity.position.clone(), entity.userData.color || new THREE.Color(0xff0000), 1.5);
             }
+
+            // Spawn essence drop based on creature species
+            const essenceData = CREATURE_ESSENCE_MAP[entity.userData.speciesType];
+            if (essenceData) {
+                const boost = factory.createStatBoost(entity.position.x, entity.position.z, essenceData);
+                world.add(boost);
+                state.statBoosts.push(boost);
+            }
+
             world.remove(entity);
             const idx = state.entities.indexOf(entity);
             if (idx > -1) state.entities.splice(idx, 1);
@@ -168,12 +230,31 @@ export default class CombatSystem {
         }
     }
 
-    _damagePlayer(amount, state, audio) {
+    _damagePlayer(amount, ctx, sourcePos = null) {
+        const { state, audio, playerController } = ctx;
         if (state.invincibleTimer > 0) return;
         if (state.isDead) return;
 
         state.player.hp -= amount;
         audio.hurt();
+
+        // Knockback
+        if (sourcePos) {
+            state.player.stunTimer = 0.4;
+            const dx = state.player.pos.x - sourcePos.x;
+            const dz = state.player.pos.z - sourcePos.z;
+            const dist = Math.sqrt(dx * dx + dz * dz) || 1;
+            const knockSpeed = 0.4;
+            state.player.vel.x = (dx / dist) * knockSpeed;
+            state.player.vel.z = (dz / dist) * knockSpeed;
+            state.player.vel.y = 0.15; // Small hop
+            state.player.onGround = false;
+        }
+
+        // Flash player model
+        if (playerController && playerController.modelPivot) {
+            this._flashEntity(playerController.modelPivot, 0xff0000, 0.2);
+        }
 
         // Red screen flash
         if (this.ui.flash) {
@@ -193,7 +274,8 @@ export default class CombatSystem {
         }
     }
 
-    _updateCreatureContact(dt, state, audio) {
+    _updateCreatureContact(dt, ctx) {
+        const { state, audio } = ctx;
         const playerPos = state.player.pos;
 
         for (const e of state.entities) {
@@ -212,7 +294,7 @@ export default class CombatSystem {
 
             if (dist < contactDist) {
                 e.userData.contactCooldown = CREATURE_CONTACT_COOLDOWN;
-                this._damagePlayer(CREATURE_CONTACT_DAMAGE, state, audio);
+                this._damagePlayer(CREATURE_CONTACT_DAMAGE, ctx, e.position);
             }
         }
     }

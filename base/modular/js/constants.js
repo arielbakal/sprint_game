@@ -126,8 +126,8 @@ export const SCALE_LERP = 0.05;
 export const PLAYER_MAX_HP = 20;
 export const PLAYER_BASE_ATTACK = 2;
 export const ATTACK_COOLDOWN = 0.4;
-export const ATTACK_RANGE = 3.5;
-export const ATTACK_ARC = Math.PI * 0.8;
+export const ATTACK_RANGE = 2.0;
+export const ATTACK_ARC = Math.PI * 0.6;
 
 // Creature combat
 export const CREATURE_HP = 6;
@@ -143,3 +143,11 @@ export const STAT_BOOST_PICKUP_RANGE = 2.0;
 export const STAT_BOOST_BOB_SPEED = 3.0;
 export const STAT_BOOST_BOB_HEIGHT = 0.3;
 export const STAT_BOOST_SPIN_SPEED = 2.0;
+
+// Essence drops from creatures
+export const CREATURE_ESSENCE_MAP = {
+    conehead: { stat: 'speed', amount: 0.01 },
+    blobby:   { stat: 'attack', amount: 1 },
+    blocky:   { stat: 'health', amount: 3 }
+};
+export const ATTACK_SWING_DURATION = 0.4;
