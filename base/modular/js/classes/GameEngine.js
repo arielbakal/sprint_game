@@ -474,30 +474,6 @@ export default class GameEngine {
             this.world.add(c);
         }
 
-        // --- Stat Boost Crystals (many small pickups for testing) ---
-        const boostTypes = [
-            { stat: 'attack', amount: 1 },
-            { stat: 'speed', amount: 0.01 },
-            { stat: 'health', amount: 3 }
-        ];
-        const islandCenters = [
-            { cx: 0, cz: 0, maxR: 9.0 },
-            { cx: 80, cz: 0, maxR: 11.0 },
-            { cx: 0, cz: 110, maxR: 24.0 },
-            { cx: -90, cz: -50, maxR: 8.0 },
-            { cx: 50, cz: -100, maxR: 10.0 }
-        ];
-        for (const ic of islandCenters) {
-            const numBoosts = 4 + Math.floor(Math.random() * 4); // 4-7 per island
-            for (let b = 0; b < numBoosts; b++) {
-                const p = rndPolar(ic.cx, ic.cz, 2.0, ic.maxR);
-                const boostData = boostTypes[Math.floor(Math.random() * boostTypes.length)];
-                const boost = this.factory.createStatBoost(p.x, p.z, boostData);
-                this.world.add(boost);
-                this.state.statBoosts.push(boost);
-            }
-        }
-
         // Global clouds scattered across the entire map
         for (let i = 0; i < 40; i++) {
             const cx = (Math.random() - 0.5) * 300;
@@ -733,11 +709,24 @@ export default class GameEngine {
                 }
                 break;
             }
+            case 'player_attack': {
+                // Another player hit us — apply damage
+                if (event.targetId === this.network.playerId) {
+                    const ctx = {
+                        state: this.state,
+                        audio: this.audio,
+                        playerController: this.playerController
+                    };
+                    const sourcePos = event.x !== undefined ? { x: event.x, y: 0, z: event.z } : null;
+                    this.combatSystem._damagePlayer(event.damage || 2, ctx, sourcePos);
+                }
+                break;
+            }
         }
     }
 
-    broadcastWorldEvent(action, x, z) {
-        this.network.sendWorldEvent({ action, x, z });
+    broadcastWorldEvent(action, x, z, extra) {
+        this.network.sendWorldEvent({ action, x, z, ...extra });
     }
 
     /**
@@ -795,8 +784,9 @@ export default class GameEngine {
                 camera,
                 playerController: this.playerController,
                 playerCat: this.playerCat,
+                remotePlayers: this.remotePlayers,
                 t,
-                broadcastWorldEvent: (action, x, z) => this.broadcastWorldEvent(action, x, z)
+                broadcastWorldEvent: (action, x, z, extra) => this.broadcastWorldEvent(action, x, z, extra)
             };
 
             // --- Boat system (boarding, physics, proximity) ---

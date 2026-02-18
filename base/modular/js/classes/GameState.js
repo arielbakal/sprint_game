@@ -35,6 +35,7 @@ export default class GameState {
             attack: 2,
             baseAttack: 2,
             speedBoost: 0,
+            stunTimer: 0, // For knockback
         };
 
         // Combat
